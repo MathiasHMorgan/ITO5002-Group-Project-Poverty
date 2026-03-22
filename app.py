@@ -1,10 +1,9 @@
-from pathlib import Path
-
 import folium
 import pandas as pd
 import requests
 import streamlit as st
 from streamlit_folium import st_folium
+from pathlib import Path
 
 st.set_page_config(page_title="Melbourne Food, Shelter & Charity Finder", layout="wide")
 st.title("Melbourne Food, Shelter & Charity Finder")
