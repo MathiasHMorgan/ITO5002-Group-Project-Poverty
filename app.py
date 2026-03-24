@@ -14,21 +14,27 @@ st.title("Melbourne Overnight Support Finder")
 st.caption("Find nearby food, shelter, sanitation and community support services in Melbourne.")
 
 # ---------- Urgent help ----------
-st.error(
-    "Need help tonight?\n\n"
-    "• Homelessness / urgent accommodation: 1800 825 955\n"
-    "• Family violence support (Safe Steps): 1800 015 188\n"
-    "• Emergency: 000"
-)
+st.markdown("## Need help tonight?")
 
-hero_col1, hero_col2, hero_col3 = st.columns(3)
-with hero_col1:
-    st.link_button("Get help now", "https://services.dffh.vic.gov.au/getting-help", use_container_width=True)
-with hero_col2:
-    st.link_button("Safe Steps 24/7", "https://safesteps.org.au/", use_container_width=True)
-with hero_col3:
-    st.link_button("Emergency 000", "https://www.triplezero.gov.au/", use_container_width=True)
+c1, c2, c3 = st.columns(3)
 
+with c1:
+    with st.container(border=True):
+        st.markdown("### 🛏️ Accommodation")
+        st.write("**1800 825 955**")
+        st.caption("Homelessness / urgent accommodation")
+
+with c2:
+    with st.container(border=True):
+        st.markdown("### 🛡️ Safe Steps")
+        st.write("**1800 015 188**")
+        st.caption("Family violence support")
+
+with c3:
+    with st.container(border=True):
+        st.markdown("### 🚨 Emergency")
+        st.write("**000**")
+        st.caption("Immediate danger or emergency")
 st.caption(
     "This map is for support and wayfinding only. Availability, opening hours and safety conditions can change. "
     "Call first where possible."
