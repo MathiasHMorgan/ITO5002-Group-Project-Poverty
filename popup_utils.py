@@ -23,4 +23,5 @@ def build_popup_html(row) -> str:
         hours=clean(row.get("hours"), "Not listed"),
         transport=clean(row.get("public_transport"), "Not listed"),
         source=clean(row.get("source"), "Source not listed"),
+        notes=clean(row.get("notes"), "Not listed"),
     )

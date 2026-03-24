@@ -1,17 +1,19 @@
-from pathlib import Path
-
 import folium
 import pandas as pd
 import requests
 import streamlit as st
+from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
 
 from popup_utils import build_popup_html
 
 st.set_page_config(page_title="Melbourne Overnight Support Finder", layout="wide")
-st.title("Melbourne Overnight Support Finder")
-st.caption("Find nearby support services in Melbourne.")
 
+# ---------- Page header ----------
+st.title("Melbourne Overnight Support Finder")
+st.caption("Find nearby food, shelter, sanitation and community support services in Melbourne.")
+
+# ---------- Urgent help ----------
 st.error(
     "Need help tonight?\n\n"
     "• Homelessness / urgent accommodation: 1800 825 955\n"
@@ -19,17 +21,20 @@ st.error(
     "• Emergency: 000"
 )
 
-col1, col2 = st.columns(2)
-with col1:
-    st.link_button("Get help now", "https://services.dffh.vic.gov.au/getting-help")
-with col2:
-    st.link_button("Safe Steps 24/7", "https://safesteps.org.au/")
+hero_col1, hero_col2, hero_col3 = st.columns(3)
+with hero_col1:
+    st.link_button("Get help now", "https://services.dffh.vic.gov.au/getting-help", use_container_width=True)
+with hero_col2:
+    st.link_button("Safe Steps 24/7", "https://safesteps.org.au/", use_container_width=True)
+with hero_col3:
+    st.link_button("Emergency 000", "https://www.triplezero.gov.au/", use_container_width=True)
 
 st.caption(
     "This map is for support and wayfinding only. Availability, opening hours and safety conditions can change. "
     "Call first where possible."
 )
 
+# ---------- Config ----------
 melbCoords = "(-38.40,144.60,-37.45,145.50)"
 
 OSM_QUERY = f"""
@@ -43,6 +48,9 @@ OSM_QUERY = f"""
 
   node["office"="charity"]{melbCoords};
   way["office"="charity"]{melbCoords};
+
+  node["amenity"="place_of_worship"]{melbCoords};
+  way["amenity"="place_of_worship"]{melbCoords};
 );
 out center;
 """
@@ -53,12 +61,29 @@ OVERPASS_URLS = [
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ]
 
-HELPING_OUT_URL = (
-    "https://data.melbourne.vic.gov.au/api/explore/v2.1/catalog/datasets/"
-    "free-and-cheap-support-services-with-opening-hours-public-transport-and-parking-/records"
-)
-
 PUBLIC_TOILETS_URL = "https://data.melbourne.vic.gov.au/api/v2/catalog/datasets/public-toilets/exports/json"
+
+TYPE_ORDER = [
+    "Food Bank",
+    "Homeless Shelter",
+    "Youth Shelter",
+    "Women's Shelter",
+    "Shelter",
+    "Charity Organisation",
+    "Religious / Community Support",
+    "Sanitation",
+]
+
+TYPE_TO_ICON = {
+    "Food Bank": ("green", "cutlery"),
+    "Homeless Shelter": ("red", "home"),
+    "Youth Shelter": ("cadetblue", "home"),
+    "Women's Shelter": ("pink", "heart"),
+    "Shelter": ("darkred", "home"),
+    "Charity Organisation": ("blue", "info-sign"),
+    "Religious / Community Support": ("purple", "plus"),
+    "Sanitation": ("orange", "tint"),
+}
 
 
 def address_from_tags(tags):
@@ -70,11 +95,20 @@ def address_from_tags(tags):
 def classify(tags):
     social = tags.get("social_facility", "")
     office = tags.get("office", "")
+    amenity = tags.get("amenity", "")
     social_for = str(tags.get("social_facility:for", "")).lower()
-    text = f"{tags.get('name', '')} {tags.get('description', '')}".lower()
+
+    text = " ".join([
+        str(tags.get("name", "")),
+        str(tags.get("description", "")),
+        str(tags.get("operator", "")),
+        str(tags.get("website", "")),
+        str(tags.get("denomination", "")),
+    ]).lower()
 
     if social == "food_bank":
         return "Food Bank"
+
     if social == "shelter":
         if "homeless" in social_for:
             return "Homeless Shelter"
@@ -85,8 +119,29 @@ def classify(tags):
         ):
             return "Women's Shelter"
         return "Shelter"
+
     if office == "charity":
         return "Charity Organisation"
+
+    if amenity == "place_of_worship":
+        support_keywords = [
+            "community",
+            "care",
+            "mission",
+            "relief",
+            "outreach",
+            "parish",
+            "salvation army",
+            "st vincent de paul",
+            "vinnies",
+            "wesley",
+            "anglicare",
+            "unitingcare",
+            "baptcare",
+        ]
+        if any(keyword in text for keyword in support_keywords):
+            return "Religious / Community Support"
+        return "Unknown"
 
     return "Unknown"
 
@@ -99,6 +154,10 @@ def is_useless_row(row):
         and row["phone"] == "No phone listed"
         and row["website"] == "No website listed"
     )
+
+
+def marker_style(service_type):
+    return TYPE_TO_ICON.get(service_type, ("gray", "info-sign"))
 
 
 @st.cache_data(ttl=86400)
@@ -133,17 +192,36 @@ def load_osm_data():
         if lat is None or lon is None:
             continue
 
+        service_type = classify(tags)
+        address = address_from_tags(tags)
+        phone = tags.get("phone", "No phone listed")
+        website = tags.get("website", "No website listed")
+        name = tags.get("name", "Unknown")
+
+        note = ""
+
+        if service_type == "Religious / Community Support":
+            has_name = name != "Unknown"
+            has_address = address != "No address listed"
+            has_phone = phone != "No phone listed"
+
+            if not has_name or not (has_address or has_phone):
+                continue
+
+            note = "Religious or community-linked venue. Support availability is not guaranteed; contact directly where possible."
+
         rows.append({
-            "name": tags.get("name", "Unknown"),
-            "type": classify(tags),
+            "name": name,
+            "type": service_type,
             "lat": lat,
             "lon": lon,
-            "address": address_from_tags(tags),
-            "phone": tags.get("phone", "No phone listed"),
-            "website": tags.get("website", "No website listed"),
+            "address": address,
+            "phone": phone,
+            "website": website,
             "hours": "",
             "public_transport": "",
             "source": "OSM",
+            "notes": note,
         })
 
     df = pd.DataFrame(rows).drop_duplicates()
@@ -154,60 +232,7 @@ def load_osm_data():
     df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
     df = df.dropna(subset=["lat", "lon"]).reset_index(drop=True)
     df = df[~df.apply(is_useless_row, axis=1)].reset_index(drop=True)
-    return df
 
-
-@st.cache_data(ttl=86400)
-def load_helping_out_data():
-    all_rows = []
-    offset = 0
-    limit = 100
-
-    while True:
-        response = requests.get(
-            HELPING_OUT_URL,
-            params={"limit": limit, "offset": offset},
-            timeout=60,
-            headers={"User-Agent": "Streamlit Melbourne Support Finder"},
-        )
-        response.raise_for_status()
-        payload = response.json()
-        results = payload.get("results", [])
-
-        if not results:
-            break
-
-        all_rows.extend(results)
-
-        if len(results) < limit:
-            break
-
-        offset += limit
-
-    df = pd.DataFrame(all_rows)
-    if df.empty:
-        return df
-
-    df["name"] = df["name"].fillna("Unknown")
-    df["type"] = "Helping Out Services"
-    df["address"] = (
-        df[["address_1", "address_2", "suburb"]]
-        .fillna("")
-        .agg(", ".join, axis=1)
-        .str.replace(r"(,\s*)+", ", ", regex=True)
-        .str.strip(", ")
-    )
-    df["address"] = df["address"].replace("", "No address listed")
-    df["phone"] = df["phone"].fillna("No phone listed")
-    df["website"] = df["website"].fillna("No website listed")
-    df["hours"] = df["opening_hours"].fillna("") if "opening_hours" in df.columns else ""
-    df["public_transport"] = df["tram_routes"].fillna("") if "tram_routes" in df.columns else ""
-    df["lat"] = pd.to_numeric(df["latitude"], errors="coerce")
-    df["lon"] = pd.to_numeric(df["longitude"], errors="coerce")
-    df["source"] = "City of Melbourne Helping Out"
-
-    keep_cols = ["name", "type", "lat", "lon", "address", "phone", "website", "hours", "public_transport", "source"]
-    df = df[keep_cols].dropna(subset=["lat", "lon"]).drop_duplicates().reset_index(drop=True)
     return df
 
 
@@ -246,35 +271,25 @@ def load_sanitation_data():
     df["hours"] = ""
     df["public_transport"] = ""
     df["source"] = "City of Melbourne Public Toilets"
+    df["notes"] = "Public toilet location."
 
-    keep_cols = ["name", "type", "lat", "lon", "address", "phone", "website", "hours", "public_transport", "source"]
+    keep_cols = [
+        "name", "type", "lat", "lon", "address", "phone", "website",
+        "hours", "public_transport", "source", "notes"
+    ]
     df = df[keep_cols].dropna(subset=["lat", "lon"]).drop_duplicates().reset_index(drop=True)
     return df
 
 
+# ---------- Data ----------
 osm_df = load_osm_data()
-helping_out_df = load_helping_out_data()
 sanitation_df = load_sanitation_data()
-
-filter_options = [
-    "Food Bank",
-    "Homeless Shelter",
-    "Youth Shelter",
-    "Women's Shelter",
-    "Shelter",
-    "Charity Organisation",
-    "Helping Out Services",
-    "Sanitation",
-]
 
 available_filters = []
 
 if not osm_df.empty:
     osm_types = set(osm_df["type"].dropna().unique().tolist())
-    available_filters.extend([f for f in filter_options[:6] if f in osm_types])
-
-if not helping_out_df.empty:
-    available_filters.append("Helping Out Services")
+    available_filters.extend([f for f in TYPE_ORDER[:7] if f in osm_types])
 
 if not sanitation_df.empty:
     available_filters.append("Sanitation")
@@ -283,33 +298,93 @@ if not available_filters:
     st.warning("No services found.")
     st.stop()
 
-selected_type = st.selectbox("Filter by service type", available_filters)
+# ---------- Quick actions ----------
+st.subheader("Quick Actions")
+qa1, qa2, qa3, qa4 = st.columns(4)
 
-if selected_type == "Helping Out Services":
-    filtered_df = helping_out_df.copy()
-elif selected_type == "Sanitation":
+if qa1.button("Need food", use_container_width=True):
+    st.session_state["selected_type"] = "Food Bank"
+if qa2.button("Need shelter", use_container_width=True):
+    st.session_state["selected_type"] = "Homeless Shelter" if "Homeless Shelter" in available_filters else "Shelter"
+if qa3.button("Need toilet", use_container_width=True):
+    st.session_state["selected_type"] = "Sanitation"
+if qa4.button("Need support", use_container_width=True):
+    if "Charity Organisation" in available_filters:
+        st.session_state["selected_type"] = "Charity Organisation"
+
+# ---------- Sidebar ----------
+with st.sidebar:
+    st.header("Filters")
+
+    default_type = st.session_state.get("selected_type", available_filters[0])
+    if default_type not in available_filters:
+        default_type = available_filters[0]
+
+    selected_type = st.selectbox(
+        "Filter by service type",
+        available_filters,
+        index=available_filters.index(default_type),
+    )
+
+    show_only_phone = st.checkbox("Only show places with phone", value=False)
+    show_only_website = st.checkbox("Only show places with website", value=False)
+    show_only_address = st.checkbox("Only show places with address", value=False)
+
+    st.divider()
+    st.caption("Marker colours")
+    for t in available_filters:
+        if t in TYPE_TO_ICON:
+            color, _ = marker_style(t)
+            st.markdown(f"- **{t}**: {color}")
+
+# ---------- Filtered data ----------
+if selected_type == "Sanitation":
     filtered_df = sanitation_df.copy()
 else:
     filtered_df = osm_df[osm_df["type"] == selected_type].reset_index(drop=True)
 
-st.write(f"Showing **{len(filtered_df)}** locations")
+if show_only_phone:
+    filtered_df = filtered_df[filtered_df["phone"] != "No phone listed"]
+
+if show_only_website:
+    filtered_df = filtered_df[filtered_df["website"] != "No website listed"]
+
+if show_only_address:
+    filtered_df = filtered_df[filtered_df["address"] != "No address listed"]
+
+filtered_df = filtered_df.reset_index(drop=True)
+
+# ---------- Summary metrics ----------
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Locations found", len(filtered_df))
+m2.metric("With phone", int((filtered_df["phone"] != "No phone listed").sum()) if not filtered_df.empty else 0)
+m3.metric("With website", int((filtered_df["website"] != "No website listed").sum()) if not filtered_df.empty else 0)
+m4.metric("With address", int((filtered_df["address"] != "No address listed").sum()) if not filtered_df.empty else 0)
 
 if filtered_df.empty:
     st.warning("No locations found for this filter.")
     st.stop()
 
+st.write(f"Showing **{len(filtered_df)}** locations")
+
+# ---------- Map ----------
 centre_lat = filtered_df["lat"].mean()
 centre_lon = filtered_df["lon"].mean()
 
 m = folium.Map(location=[centre_lat, centre_lon], zoom_start=12)
+cluster = MarkerCluster().add_to(m)
 
 bounds = []
 for _, row in filtered_df.iterrows():
+    color, icon_name = marker_style(row["type"])
+
     folium.Marker(
         location=[row["lat"], row["lon"]],
         popup=folium.Popup(build_popup_html(row), max_width=320),
         tooltip=row["name"],
-    ).add_to(m)
+        icon=folium.Icon(color=color, icon=icon_name),
+    ).add_to(cluster)
+
     bounds.append([row["lat"], row["lon"]])
 
 if bounds:
@@ -317,9 +392,34 @@ if bounds:
 
 st_folium(m, width=None, height=720)
 
-st.subheader(f"Service List – {selected_type}")
-st.dataframe(
-    filtered_df[["name", "type", "address", "phone", "website"]],
-    width="stretch",
-    hide_index=True,
-)
+# ---------- Results cards ----------
+st.subheader(f"Results – {selected_type}")
+
+for _, row in filtered_df.iterrows():
+    website = row["website"]
+    phone = row["phone"]
+    notes = row.get("notes", "")
+
+    with st.container(border=True):
+        c1, c2 = st.columns([3, 1])
+
+        with c1:
+            st.markdown(f"### {row['name']}")
+            st.caption(row["type"])
+            st.write(f"**Address:** {row['address']}")
+            st.write(f"**Phone:** {phone}")
+            st.write(f"**Website:** {website}")
+            if notes:
+                st.caption(notes)
+
+        with c2:
+            st.metric("Lat", f"{row['lat']:.4f}")
+            st.metric("Lon", f"{row['lon']:.4f}")
+
+# ---------- Raw table ----------
+with st.expander("Show raw table"):
+    st.dataframe(
+        filtered_df[["name", "type", "address", "phone", "website"]],
+        width="stretch",
+        hide_index=True,
+    )
