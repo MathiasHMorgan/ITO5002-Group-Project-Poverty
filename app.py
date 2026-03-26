@@ -2,9 +2,11 @@ import folium
 import pandas as pd
 import requests
 import streamlit as st
+import sqlite3
 from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
 from popup_utils import build_popup_html
+from datetime import datetime
 
 st.set_page_config(page_title="Melbourne Food, Sanitation and Shelter Finder", layout="wide")
 
@@ -119,6 +121,58 @@ TYPE_TO_ICON = {
     "Sanitation": ("orange", "tint"),
 }
 
+DB_PATH = "community_food_support.db"
+
+
+def get_connection():
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
+
+
+def init_db():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS food_offers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            address TEXT NOT NULL,
+            phone TEXT,
+            website TEXT,
+            notes TEXT,
+            lat REAL NOT NULL,
+            lon REAL NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
+
+def geocode_address(address: str):
+    try:
+        response = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={
+                "q": f"{address}, Melbourne, Victoria, Australia",
+                "format": "jsonv2",
+                "limit": 1,
+                "countrycodes": "au",
+            },
+            timeout=20,
+            headers={"User-Agent": "Melbourne Support Finder"},
+        )
+        response.raise_for_status()
+        results = response.json()
+
+        if not results:
+            return None, None
+
+        return float(results[0]["lat"]), float(results[0]["lon"])
+
+    except requests.exceptions.RequestException:
+        return None, None
+
 def address_from_tags(tags):
     parts = [tags.get(k, "") for k in ["addr:housenumber", "addr:street", "addr:suburb", "addr:postcode"]]
     parts = [p for p in parts if p]
@@ -224,10 +278,38 @@ def is_useless_row(row):
         and row["website"] == "No website listed"
     )
 
-
 def marker_style(service_type):
     return TYPE_TO_ICON.get(service_type, ("gray", "info-sign"))
 
+
+def marker_style_for_row(row):
+    if row.get("source") == "Community food offer":
+        return ("darkgreen", "star")
+    return marker_style(row["type"])
+
+@st.cache_data(ttl=30)
+def load_custom_food_offers():
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT * FROM food_offers", conn)
+    conn.close()
+
+    if df.empty:
+        return df
+
+    df["type"] = "Food Bank"
+    df["hours"] = ""
+    df["public_transport"] = ""
+    df["source"] = "Community food offer"
+    df["notes"] = df["notes"].fillna("Food support submitted through the app.")
+    df["address"] = df["address"].fillna("No address listed")
+    df["phone"] = df["phone"].fillna("No phone listed")
+    df["website"] = df["website"].fillna("No website listed")
+
+    keep_cols = [
+        "name", "type", "lat", "lon", "address", "phone",
+        "website", "hours", "public_transport", "source", "notes"
+    ]
+    return df[keep_cols].dropna(subset=["lat", "lon"]).drop_duplicates().reset_index(drop=True)
 
 @st.cache_data(ttl=86400)
 def load_osm_data():
@@ -749,18 +831,26 @@ def food_offer_dialog():
         st.write("Add a restaurant, uni café, or other place offering food support.")
 
         name = st.text_input("Organisation / venue name*")
-        address = st.text_input("Address")
+        address = st.text_input("Address*")
         phone = st.text_input("Phone")
         website = st.text_input("Website")
         notes = st.text_area("Notes", placeholder="e.g. free meals after 5pm on weekdays")
-        lat = st.number_input("Latitude*", format="%.6f")
-        lon = st.number_input("Longitude*", format="%.6f")
 
         submitted = st.form_submit_button("Submit")
 
         if submitted:
             if not name.strip():
                 st.warning("Name is required.")
+                return
+
+            if not address.strip():
+                st.warning("Address is required.")
+                return
+
+            lat, lon = geocode_address(address.strip())
+
+            if lat is None or lon is None:
+                st.warning("Could not find that address on the map. Please check the address and try again.")
                 return
 
             conn = get_connection()
@@ -774,8 +864,8 @@ def food_offer_dialog():
                 phone.strip(),
                 website.strip(),
                 notes.strip(),
-                float(lat),
-                float(lon),
+                lat,
+                lon,
                 datetime.utcnow().isoformat()
             ))
             conn.commit()
@@ -784,10 +874,12 @@ def food_offer_dialog():
             st.cache_data.clear()
             st.session_state["selected_type"] = "Food Bank"
             st.success("Food provider added.")
+            st.rerun()
 
 # ---------- Data ----------
 osm_df = load_osm_data()
 helping_out_food_df = load_helping_out_food_data()
+custom_food_df = load_custom_food_offers()
 sanitation_df = load_sanitation_data()
 helping_out_shelter_df = load_helping_out_shelter_data()
 helping_out_support_df = load_helping_out_support_data()
@@ -798,7 +890,7 @@ osm_types = set(osm_df["type"].dropna().unique().tolist()) if not osm_df.empty e
 
 for f in TYPE_ORDER:
     if f == "Food Bank":
-        if "Food Bank" in osm_types or not helping_out_food_df.empty:
+        if "Food Bank" in osm_types or not helping_out_food_df.empty or not custom_food_df.empty:
             available_filters.append(f)
 
     elif f == "Shelter / Accommodation":
@@ -865,6 +957,12 @@ with st.sidebar:
             color, _ = marker_style(t)
             st.markdown(f"- **{t}**: {color}")
 
+    st.divider()
+    st.subheader("Offer food support")
+    st.caption("Restaurants, cafés or organisations can add a food support location.")
+    if st.button("Add food provider", use_container_width=True):
+        food_offer_dialog()
+
 # ---------- Filtered data ----------
 if selected_type == "Sanitation":
     filtered_df = sanitation_df.copy()
@@ -872,7 +970,7 @@ if selected_type == "Sanitation":
 elif selected_type == "Food Bank":
     osm_food_df = osm_df[osm_df["type"] == "Food Bank"].copy()
     filtered_df = pd.concat(
-        [osm_food_df, helping_out_food_df],
+        [osm_food_df, helping_out_food_df, custom_food_df],
         ignore_index=True
     )
 
@@ -935,7 +1033,7 @@ cluster = MarkerCluster().add_to(m)
 
 bounds = []
 for _, row in filtered_df.iterrows():
-    color, icon_name = marker_style(row["type"])
+    color, icon_name = marker_style_for_row(row)
 
     folium.Marker(
         location=[row["lat"], row["lon"]],
@@ -965,6 +1063,8 @@ for _, row in filtered_df.iterrows():
         with c1:
             st.markdown(f"### {row['name']}")
             st.caption(row["type"])
+            if row.get("source") == "Community food offer":
+                st.caption("Submitted via community form")
             st.write(f"**Address:** {row['address']}")
             st.write(f"**Phone:** {phone}")
             st.write(f"**Website:** {website}")
