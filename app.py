@@ -64,7 +64,6 @@ out center;
 OVERPASS_URLS = [
     "https://overpass.private.coffee/api/interpreter",
     "https://overpass-api.de/api/interpreter",
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ]
 
 PUBLIC_TOILETS_URL = "https://data.melbourne.vic.gov.au/api/v2/catalog/datasets/public-toilets/exports/json"
@@ -288,6 +287,7 @@ def load_sanitation_data():
 
 
 # ---------- Data ----------
+
 osm_df = load_osm_data()
 sanitation_df = load_sanitation_data()
 
