@@ -4,19 +4,18 @@ import requests
 import streamlit as st
 from folium.plugins import MarkerCluster
 from streamlit_folium import st_folium
-
 from popup_utils import build_popup_html
 
-st.set_page_config(page_title="Melbourne Overnight Support Finder", layout="wide")
+st.set_page_config(page_title="Melbourne Food, Sanitation and Shelter Finder", layout="wide")
 
 # ---------- Page header ----------
-st.title("Melbourne Overnight Support Finder")
+st.title("Melbourne Food, Sanitation and Shelter Finder")
 st.caption("Find nearby food, shelter, sanitation and community support services in Melbourne.")
 
 # ---------- Urgent help ----------
 st.markdown("## Need help tonight?")
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4, c5 = st.columns(5)
 
 with c1:
     with st.container(border=True):
@@ -26,7 +25,7 @@ with c1:
 
 with c2:
     with st.container(border=True):
-        st.markdown("### 🛡️ Safe Steps")
+        st.markdown("### 🛡️ Family Violence")
         st.write("**1800 015 188**")
         st.caption("Family violence support")
 
@@ -35,6 +34,19 @@ with c3:
         st.markdown("### 🚨 Emergency")
         st.write("**000**")
         st.caption("Immediate danger or emergency")
+
+with c4:
+    with st.container(border=True):
+        st.markdown("### 💊 Drugs / Alcohol")
+        st.write("**211**")
+        st.caption("Free call for food, housing and support services")
+
+with c5:
+    with st.container(border=True):
+        st.markdown("### 🥫 Food")
+        st.write("**211**")
+        st.caption("Free call for food, housing and support services")
+
 st.caption(
     "This map is for support and wayfinding only. Availability, opening hours and safety conditions can change. "
     "Call first where possible."
@@ -49,14 +61,26 @@ OSM_QUERY = f"""
   node["amenity"="social_facility"]["social_facility"="food_bank"]{melbCoords};
   way["amenity"="social_facility"]["social_facility"="food_bank"]{melbCoords};
 
+  node["amenity"="social_facility"]["social_facility"="soup_kitchen"]{melbCoords};
+  way["amenity"="social_facility"]["social_facility"="soup_kitchen"]{melbCoords};
+
+  node["amenity"="food_sharing"]{melbCoords};
+  way["amenity"="food_sharing"]{melbCoords};
+
   node["amenity"="social_facility"]["social_facility"="shelter"]{melbCoords};
   way["amenity"="social_facility"]["social_facility"="shelter"]{melbCoords};
+
+  node["amenity"="social_facility"]["social_facility"="group_home"]{melbCoords};
+  way["amenity"="social_facility"]["social_facility"="group_home"]{melbCoords};
 
   node["office"="charity"]{melbCoords};
   way["office"="charity"]{melbCoords};
 
   node["amenity"="place_of_worship"]{melbCoords};
   way["amenity"="place_of_worship"]{melbCoords};
+
+  node["amenity"="community_centre"]{melbCoords};
+  way["amenity"="community_centre"]{melbCoords};
 );
 out center;
 """
@@ -68,12 +92,17 @@ OVERPASS_URLS = [
 
 PUBLIC_TOILETS_URL = "https://data.melbourne.vic.gov.au/api/v2/catalog/datasets/public-toilets/exports/json"
 
+HELPING_OUT_URL = (
+    "https://data.melbourne.vic.gov.au/api/explore/v2.1/catalog/datasets/"
+    "free-and-cheap-support-services-with-opening-hours-public-transport-and-parking-/records"
+)
+
 TYPE_ORDER = [
     "Food Bank",
-    "Homeless Shelter",
+    "Shelter / Accommodation",
     "Youth Shelter",
     "Women's Shelter",
-    "Shelter",
+    "Support Services",
     "Charity Organisation",
     "Religious / Community Support",
     "Sanitation",
@@ -81,15 +110,14 @@ TYPE_ORDER = [
 
 TYPE_TO_ICON = {
     "Food Bank": ("green", "cutlery"),
-    "Homeless Shelter": ("red", "home"),
+    "Shelter / Accommodation": ("red", "home"),
     "Youth Shelter": ("cadetblue", "home"),
     "Women's Shelter": ("pink", "heart"),
-    "Shelter": ("darkred", "home"),
+    "Support Services": ("darkblue", "plus"),
     "Charity Organisation": ("blue", "info-sign"),
     "Religious / Community Support": ("purple", "plus"),
     "Sanitation": ("orange", "tint"),
 }
-
 
 def address_from_tags(tags):
     parts = [tags.get(k, "") for k in ["addr:housenumber", "addr:street", "addr:suburb", "addr:postcode"]]
@@ -111,45 +139,81 @@ def classify(tags):
         str(tags.get("denomination", "")),
     ]).lower()
 
-    if social == "food_bank":
+    food_keywords = [
+        "food", "meal", "meals", "pantry", "soup", "kitchen", "relief",
+        "groceries", "parcel", "breakfast", "lunch", "dinner",
+        "fareshare", "secondbite", "ozharvest", "community meal"
+    ]
+
+    support_keywords = [
+        "community", "care", "mission", "relief", "outreach", "parish",
+        "salvation army", "st vincent de paul", "vinnies", "wesley",
+        "anglicare", "unitingcare", "baptcare",
+    ]
+
+    dv_keywords = [
+        "domestic violence",
+        "family violence",
+        "women's refuge",
+        "womens refuge",
+        "safe steps",
+        "violence support",
+    ]
+
+    drug_alcohol_keywords = [
+        "drug",
+        "alcohol",
+        "aod",
+        "addiction",
+        "rehab",
+        "rehabilitation",
+        "substance",
+        "detox",
+    ]
+
+    if social in {"food_bank", "soup_kitchen"}:
         return "Food Bank"
 
-    if social == "shelter":
-        if "homeless" in social_for:
-            return "Homeless Shelter"
+    if amenity == "food_sharing":
+        return "Food Bank"
+
+    if social in {"shelter", "group_home"}:
         if "juvenile" in social_for or "youth" in text:
             return "Youth Shelter"
-        if "woman" in social_for or any(
-            x in text for x in ["domestic violence", "family violence", "women's refuge", "womens refuge"]
-        ):
+        if "woman" in social_for or any(x in text for x in dv_keywords):
             return "Women's Shelter"
-        return "Shelter"
+        return "Shelter / Accommodation"
 
     if office == "charity":
+        if any(k in text for k in food_keywords):
+            return "Food Bank"
+        if any(k in text for k in drug_alcohol_keywords):
+            return "Support Services"
+        if any(k in text for k in dv_keywords):
+            return "Women's Shelter"
         return "Charity Organisation"
 
+    if amenity == "community_centre":
+        if any(k in text for k in food_keywords):
+            return "Food Bank"
+        if any(k in text for k in drug_alcohol_keywords):
+            return "Support Services"
+        if any(k in text for k in dv_keywords):
+            return "Women's Shelter"
+        return "Unknown"
+
     if amenity == "place_of_worship":
-        support_keywords = [
-            "community",
-            "care",
-            "mission",
-            "relief",
-            "outreach",
-            "parish",
-            "salvation army",
-            "st vincent de paul",
-            "vinnies",
-            "wesley",
-            "anglicare",
-            "unitingcare",
-            "baptcare",
-        ]
-        if any(keyword in text for keyword in support_keywords):
+        if any(k in text for k in food_keywords):
+            return "Food Bank"
+        if any(k in text for k in drug_alcohol_keywords):
+            return "Support Services"
+        if any(k in text for k in dv_keywords):
+            return "Women's Shelter"
+        if any(k in text for k in support_keywords):
             return "Religious / Community Support"
         return "Unknown"
 
     return "Unknown"
-
 
 def is_useless_row(row):
     return (
@@ -168,7 +232,7 @@ def marker_style(service_type):
 @st.cache_data(ttl=86400)
 def load_osm_data():
     data = None
-    last_error = None
+    errors = []
 
     for url in OVERPASS_URLS:
         try:
@@ -182,10 +246,13 @@ def load_osm_data():
             data = response.json()
             break
         except requests.exceptions.RequestException as e:
-            last_error = e
+            errors.append(f"{url} -> {e}")
 
     if data is None:
-        st.error(f"Could not load OSM service data: {last_error}")
+        st.error("Could not load OSM service data from any Overpass endpoint.")
+        with st.expander("Show endpoint errors"):
+            for err in errors:
+                st.write(err)
         return pd.DataFrame()
 
     rows = []
@@ -242,6 +309,397 @@ def load_osm_data():
 
 
 @st.cache_data(ttl=86400)
+def load_helping_out_food_data():
+    all_rows = []
+    offset = 0
+    limit = 100
+
+    while True:
+        response = requests.get(
+            HELPING_OUT_URL,
+            params={"limit": limit, "offset": offset},
+            timeout=60,
+            headers={"User-Agent": "Streamlit Melbourne Support Finder"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        results = payload.get("results", [])
+
+        if not results:
+            break
+
+        all_rows.extend(results)
+
+        if len(results) < limit:
+            break
+
+        offset += limit
+
+    df = pd.DataFrame(all_rows)
+    if df.empty:
+        return df
+
+    text_cols = [
+        c for c in [
+            "name",
+            "what",
+            "who",
+            "category_1",
+            "category_2",
+            "category_3",
+            "category_4",
+            "category_5",
+            "category_6",
+        ] if c in df.columns
+    ]
+
+    if not text_cols:
+        return pd.DataFrame()
+
+    df["search_text"] = (
+        df[text_cols]
+        .fillna("")
+        .astype(str)
+        .agg(" ".join, axis=1)
+        .str.lower()
+    )
+
+    food_keywords = [
+        "food", "meal", "meals", "breakfast", "lunch", "dinner",
+        "soup", "kitchen", "pantry", "groceries", "food parcel",
+        "food bank", "relief", "voucher", "community meal"
+    ]
+
+    df = df[df["search_text"].apply(lambda x: any(k in x for k in food_keywords))].copy()
+
+    if df.empty:
+        return df
+
+    df["name"] = df["name"].fillna("Unknown") if "name" in df.columns else "Unknown"
+
+    address_cols = [c for c in ["address_1", "address_2", "suburb"] if c in df.columns]
+    if address_cols:
+        df["address"] = (
+            df[address_cols]
+            .fillna("")
+            .agg(", ".join, axis=1)
+            .str.replace(r"(,\s*)+", ", ", regex=True)
+            .str.strip(", ")
+        )
+        df["address"] = df["address"].replace("", "No address listed")
+    else:
+        df["address"] = "No address listed"
+
+    df["phone"] = df["phone"].fillna("No phone listed") if "phone" in df.columns else "No phone listed"
+    df["website"] = df["website"].fillna("No website listed") if "website" in df.columns else "No website listed"
+    df["hours"] = df["opening_hours"].fillna("") if "opening_hours" in df.columns else ""
+
+    transport_cols = [c for c in ["tram_routes", "bus_routes", "nearest_train_station"] if c in df.columns]
+    if transport_cols:
+        df["public_transport"] = (
+            df[transport_cols]
+            .fillna("")
+            .astype(str)
+            .agg(" | ".join, axis=1)
+            .str.replace(r"(\s*\|\s*)+", " | ", regex=True)
+            .str.strip(" |")
+        )
+    else:
+        df["public_transport"] = ""
+
+    df["lat"] = pd.to_numeric(df["latitude"], errors="coerce") if "latitude" in df.columns else pd.NA
+    df["lon"] = pd.to_numeric(df["longitude"], errors="coerce") if "longitude" in df.columns else pd.NA
+    df = df.dropna(subset=["lat", "lon"]).copy()
+
+    df["type"] = "Food Bank"
+    df["source"] = "City of Melbourne Helping Out"
+    df["notes"] = "Food-related support service from City of Melbourne Helping Out."
+
+    keep_cols = [
+        "name", "type", "lat", "lon", "address", "phone", "website",
+        "hours", "public_transport", "source", "notes"
+    ]
+    df = df[keep_cols].drop_duplicates().reset_index(drop=True)
+
+    return df
+
+@st.cache_data(ttl=86400)
+def load_helping_out_shelter_data():
+    all_rows = []
+    offset = 0
+    limit = 100
+
+    while True:
+        response = requests.get(
+            HELPING_OUT_URL,
+            params={"limit": limit, "offset": offset},
+            timeout=60,
+            headers={"User-Agent": "Streamlit Melbourne Support Finder"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        results = payload.get("results", [])
+
+        if not results:
+            break
+
+        all_rows.extend(results)
+
+        if len(results) < limit:
+            break
+
+        offset += limit
+
+    df = pd.DataFrame(all_rows)
+    if df.empty:
+        return df
+
+    text_cols = [
+        c for c in [
+            "name",
+            "what",
+            "who",
+            "category_1",
+            "category_2",
+            "category_3",
+            "category_4",
+            "category_5",
+            "category_6",
+        ] if c in df.columns
+    ]
+
+    if not text_cols:
+        return pd.DataFrame()
+
+    df["search_text"] = (
+        df[text_cols]
+        .fillna("")
+        .astype(str)
+        .agg(" ".join, axis=1)
+        .str.lower()
+    )
+
+    shelter_keywords = [
+        "accommodation",
+        "crisis accommodation",
+        "homeless",
+        "homelessness",
+        "housing",
+        "rough sleeping",
+        "sleeping rough",
+        "supported housing",
+        "transitional housing",
+        "night shelter",
+        "rooming",
+        "common ground",
+        "launch housing",
+        "house of welcome",
+        "salvation army",
+    ]
+
+    df = df[df["search_text"].apply(lambda x: any(k in x for k in shelter_keywords))].copy()
+
+    if df.empty:
+        return df
+
+    df["name"] = df["name"].fillna("Unknown") if "name" in df.columns else "Unknown"
+
+    address_cols = [c for c in ["address_1", "address_2", "suburb"] if c in df.columns]
+    if address_cols:
+        df["address"] = (
+            df[address_cols]
+            .fillna("")
+            .agg(", ".join, axis=1)
+            .str.replace(r"(,\s*)+", ", ", regex=True)
+            .str.strip(", ")
+        )
+        df["address"] = df["address"].replace("", "No address listed")
+    else:
+        df["address"] = "No address listed"
+
+    df["phone"] = df["phone"].fillna("No phone listed") if "phone" in df.columns else "No phone listed"
+    df["website"] = df["website"].fillna("No website listed") if "website" in df.columns else "No website listed"
+    df["hours"] = df["opening_hours"].fillna("") if "opening_hours" in df.columns else ""
+
+    transport_cols = [c for c in ["tram_routes", "bus_routes", "nearest_train_station"] if c in df.columns]
+    if transport_cols:
+        df["public_transport"] = (
+            df[transport_cols]
+            .fillna("")
+            .astype(str)
+            .agg(" | ".join, axis=1)
+            .str.replace(r"(\s*\|\s*)+", " | ", regex=True)
+            .str.strip(" |")
+        )
+    else:
+        df["public_transport"] = ""
+
+    df["lat"] = pd.to_numeric(df["latitude"], errors="coerce") if "latitude" in df.columns else pd.NA
+    df["lon"] = pd.to_numeric(df["longitude"], errors="coerce") if "longitude" in df.columns else pd.NA
+    df = df.dropna(subset=["lat", "lon"]).copy()
+
+    df["type"] = "Shelter / Accommodation"
+    df["source"] = "City of Melbourne Helping Out"
+    df["notes"] = "Accommodation or homelessness-related support service from City of Melbourne Helping Out."
+
+    keep_cols = [
+        "name", "type", "lat", "lon", "address", "phone", "website",
+        "hours", "public_transport", "source", "notes"
+    ]
+    df = df[keep_cols].drop_duplicates().reset_index(drop=True)
+
+    return df
+
+@st.cache_data(ttl=86400)
+def load_helping_out_support_data():
+    all_rows = []
+    offset = 0
+    limit = 100
+
+    while True:
+        response = requests.get(
+            HELPING_OUT_URL,
+            params={"limit": limit, "offset": offset},
+            timeout=60,
+            headers={"User-Agent": "Streamlit Melbourne Support Finder"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        results = payload.get("results", [])
+
+        if not results:
+            break
+
+        all_rows.extend(results)
+
+        if len(results) < limit:
+            break
+
+        offset += limit
+
+    df = pd.DataFrame(all_rows)
+    if df.empty:
+        return df
+
+    text_cols = [
+        c for c in [
+            "name",
+            "what",
+            "who",
+            "category_1",
+            "category_2",
+            "category_3",
+            "category_4",
+            "category_5",
+            "category_6",
+        ] if c in df.columns
+    ]
+
+    if not text_cols:
+        return pd.DataFrame()
+
+    df["search_text"] = (
+        df[text_cols]
+        .fillna("")
+        .astype(str)
+        .agg(" ".join, axis=1)
+        .str.lower()
+    )
+
+    support_keywords = [
+        "drug",
+        "alcohol",
+        "aod",
+        "addiction",
+        "detox",
+        "rehab",
+        "rehabilitation",
+        "substance",
+        "family violence",
+        "domestic violence",
+        "women's support",
+        "womens support",
+        "counselling",
+        "counseling",
+        "mental health",
+        "wellbeing",
+        "support",
+        "social work",
+        "needle and syringe",
+        "crisis",
+    ]
+
+    exclude_keywords = [
+        "food bank",
+        "food parcel",
+        "meal",
+        "meals",
+        "soup kitchen",
+        "accommodation",
+        "housing",
+        "homeless",
+        "homelessness",
+        "rough sleeping",
+        "sleeping rough",
+    ]
+
+    include_mask = df["search_text"].apply(lambda x: any(k in x for k in support_keywords))
+    exclude_mask = df["search_text"].apply(lambda x: any(k in x for k in exclude_keywords))
+
+    df = df[include_mask & ~exclude_mask].copy()
+
+    if df.empty:
+        return df
+
+    df["name"] = df["name"].fillna("Unknown") if "name" in df.columns else "Unknown"
+
+    address_cols = [c for c in ["address_1", "address_2", "suburb"] if c in df.columns]
+    if address_cols:
+        df["address"] = (
+            df[address_cols]
+            .fillna("")
+            .agg(", ".join, axis=1)
+            .str.replace(r"(,\s*)+", ", ", regex=True)
+            .str.strip(", ")
+        )
+        df["address"] = df["address"].replace("", "No address listed")
+    else:
+        df["address"] = "No address listed"
+
+    df["phone"] = df["phone"].fillna("No phone listed") if "phone" in df.columns else "No phone listed"
+    df["website"] = df["website"].fillna("No website listed") if "website" in df.columns else "No website listed"
+    df["hours"] = df["opening_hours"].fillna("") if "opening_hours" in df.columns else ""
+
+    transport_cols = [c for c in ["tram_routes", "bus_routes", "nearest_train_station"] if c in df.columns]
+    if transport_cols:
+        df["public_transport"] = (
+            df[transport_cols]
+            .fillna("")
+            .astype(str)
+            .agg(" | ".join, axis=1)
+            .str.replace(r"(\s*\|\s*)+", " | ", regex=True)
+            .str.strip(" |")
+        )
+    else:
+        df["public_transport"] = ""
+
+    df["lat"] = pd.to_numeric(df["latitude"], errors="coerce") if "latitude" in df.columns else pd.NA
+    df["lon"] = pd.to_numeric(df["longitude"], errors="coerce") if "longitude" in df.columns else pd.NA
+    df = df.dropna(subset=["lat", "lon"]).copy()
+
+    df["type"] = "Support Services"
+    df["source"] = "City of Melbourne Helping Out"
+    df["notes"] = "Drug, alcohol, family violence or general support service from City of Melbourne Helping Out."
+
+    keep_cols = [
+        "name", "type", "lat", "lon", "address", "phone", "website",
+        "hours", "public_transport", "source", "notes"
+    ]
+    df = df[keep_cols].drop_duplicates().reset_index(drop=True)
+
+    return df
+
+@st.cache_data(ttl=86400)
 def load_sanitation_data():
     try:
         response = requests.get(
@@ -285,20 +743,80 @@ def load_sanitation_data():
     df = df[keep_cols].dropna(subset=["lat", "lon"]).drop_duplicates().reset_index(drop=True)
     return df
 
+@st.dialog("Offer food support")
+def food_offer_dialog():
+    with st.form("food_offer_form"):
+        st.write("Add a restaurant, uni café, or other place offering food support.")
+
+        name = st.text_input("Organisation / venue name*")
+        address = st.text_input("Address")
+        phone = st.text_input("Phone")
+        website = st.text_input("Website")
+        notes = st.text_area("Notes", placeholder="e.g. free meals after 5pm on weekdays")
+        lat = st.number_input("Latitude*", format="%.6f")
+        lon = st.number_input("Longitude*", format="%.6f")
+
+        submitted = st.form_submit_button("Submit")
+
+        if submitted:
+            if not name.strip():
+                st.warning("Name is required.")
+                return
+
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO food_offers (name, address, phone, website, notes, lat, lon, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                name.strip(),
+                address.strip(),
+                phone.strip(),
+                website.strip(),
+                notes.strip(),
+                float(lat),
+                float(lon),
+                datetime.utcnow().isoformat()
+            ))
+            conn.commit()
+            conn.close()
+
+            st.cache_data.clear()
+            st.session_state["selected_type"] = "Food Bank"
+            st.success("Food provider added.")
 
 # ---------- Data ----------
-
 osm_df = load_osm_data()
+helping_out_food_df = load_helping_out_food_data()
 sanitation_df = load_sanitation_data()
+helping_out_shelter_df = load_helping_out_shelter_data()
+helping_out_support_df = load_helping_out_support_data()
 
 available_filters = []
 
-if not osm_df.empty:
-    osm_types = set(osm_df["type"].dropna().unique().tolist())
-    available_filters.extend([f for f in TYPE_ORDER[:7] if f in osm_types])
+osm_types = set(osm_df["type"].dropna().unique().tolist()) if not osm_df.empty else set()
 
-if not sanitation_df.empty:
-    available_filters.append("Sanitation")
+for f in TYPE_ORDER:
+    if f == "Food Bank":
+        if "Food Bank" in osm_types or not helping_out_food_df.empty:
+            available_filters.append(f)
+
+    elif f == "Shelter / Accommodation":
+        if "Shelter / Accommodation" in osm_types or not helping_out_shelter_df.empty:
+            available_filters.append(f)
+
+    elif f == "Support Services":
+        support_osm_types = {"Charity Organisation", "Religious / Community Support", "Women's Shelter"}
+        if any(t in osm_types for t in support_osm_types) or not helping_out_support_df.empty:
+            available_filters.append(f)
+
+    elif f == "Sanitation":
+        if not sanitation_df.empty:
+            available_filters.append(f)
+
+    else:
+        if f in osm_types:
+            available_filters.append(f)
 
 if not available_filters:
     st.warning("No services found.")
@@ -311,12 +829,11 @@ qa1, qa2, qa3, qa4 = st.columns(4)
 if qa1.button("Need food", use_container_width=True):
     st.session_state["selected_type"] = "Food Bank"
 if qa2.button("Need shelter", use_container_width=True):
-    st.session_state["selected_type"] = "Homeless Shelter" if "Homeless Shelter" in available_filters else "Shelter"
-if qa3.button("Need toilet", use_container_width=True):
+    st.session_state["selected_type"] = "Shelter / Accommodation"
+if qa3.button("Need Sanitation", use_container_width=True):
     st.session_state["selected_type"] = "Sanitation"
 if qa4.button("Need support", use_container_width=True):
-    if "Charity Organisation" in available_filters:
-        st.session_state["selected_type"] = "Charity Organisation"
+    st.session_state["selected_type"] = "Support Services"
 
 # ---------- Sidebar ----------
 with st.sidebar:
@@ -330,6 +847,11 @@ with st.sidebar:
         "Filter by service type",
         available_filters,
         index=available_filters.index(default_type),
+    )
+
+    search_term = st.text_input(
+        "Search within current filter",
+        placeholder="e.g. Launch Housing, Salvation Army, Southbank"
     )
 
     show_only_phone = st.checkbox("Only show places with phone", value=False)
@@ -346,19 +868,50 @@ with st.sidebar:
 # ---------- Filtered data ----------
 if selected_type == "Sanitation":
     filtered_df = sanitation_df.copy()
+
+elif selected_type == "Food Bank":
+    osm_food_df = osm_df[osm_df["type"] == "Food Bank"].copy()
+    filtered_df = pd.concat(
+        [osm_food_df, helping_out_food_df],
+        ignore_index=True
+    )
+
+elif selected_type == "Shelter / Accommodation":
+    osm_shelter_df = osm_df[osm_df["type"] == "Shelter / Accommodation"].copy()
+    filtered_df = pd.concat([osm_shelter_df, helping_out_shelter_df], ignore_index=True)
+
+elif selected_type == "Support Services":
+    osm_support_df = osm_df[
+        osm_df["type"].isin(["Charity Organisation", "Religious / Community Support", "Women's Shelter"])
+    ].copy()
+    filtered_df = pd.concat([osm_support_df, helping_out_support_df], ignore_index=True)
+
 else:
     filtered_df = osm_df[osm_df["type"] == selected_type].reset_index(drop=True)
 
-if show_only_phone:
-    filtered_df = filtered_df[filtered_df["phone"] != "No phone listed"]
+if not filtered_df.empty:
+    filtered_df["name_key"] = filtered_df["name"].fillna("").str.strip().str.lower()
+    filtered_df["lat_round"] = filtered_df["lat"].round(4)
+    filtered_df["lon_round"] = filtered_df["lon"].round(4)
 
-if show_only_website:
-    filtered_df = filtered_df[filtered_df["website"] != "No website listed"]
+    filtered_df = (
+        filtered_df
+        .drop_duplicates(subset=["name_key", "lat_round", "lon_round"])
+        .drop(columns=["name_key", "lat_round", "lon_round"])
+        .reset_index(drop=True)
+    )
 
-if show_only_address:
-    filtered_df = filtered_df[filtered_df["address"] != "No address listed"]
+if search_term:
+    q = search_term.strip().lower()
 
-filtered_df = filtered_df.reset_index(drop=True)
+    search_cols = ["name", "address", "phone", "website", "notes", "source"]
+    mask = False
+
+    for col in search_cols:
+        if col in filtered_df.columns:
+            mask = mask | filtered_df[col].fillna("").astype(str).str.lower().str.contains(q, na=False)
+
+    filtered_df = filtered_df[mask].reset_index(drop=True)
 
 # ---------- Summary metrics ----------
 m1, m2, m3, m4 = st.columns(4)
