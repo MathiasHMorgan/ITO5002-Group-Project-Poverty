@@ -418,10 +418,6 @@ for _, row in filtered_df.iterrows():
             if notes:
                 st.caption(notes)
 
-        with c2:
-            st.metric("Lat", f"{row['lat']:.4f}")
-            st.metric("Lon", f"{row['lon']:.4f}")
-
 # ---------- Raw table ----------
 with st.expander("Show raw table"):
     st.dataframe(
