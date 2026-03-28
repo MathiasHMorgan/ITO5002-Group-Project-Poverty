@@ -324,7 +324,7 @@ def load_osm_data():
             if not has_name or not (has_address or has_phone):
                 continue
             note = "Religious or community-linked venue. Support availability is not guaranteed; contact directly where possible."
-    rows.append({"name": name, "type": service_type, "lat": lat, "lon": lon, "address": address,
+        rows.append({"name": name, "type": service_type, "lat": lat, "lon": lon, "address": address,
                  "phone": phone, "website": website, "hours": "", "public_transport": "", "source": "OSM", "notes": note})
 
     df = pd.DataFrame(rows).drop_duplicates()
@@ -797,6 +797,18 @@ elif selected_type == "Support Services":
 else:
     filtered_df = osm_df[osm_df["type"] == selected_type].reset_index(drop=True)
 
+# apply sidebar detail filters to ANY selected service type
+if show_only_phone:
+    filtered_df = filtered_df[filtered_df["phone"] != "No phone listed"]
+
+if show_only_website:
+    filtered_df = filtered_df[filtered_df["website"] != "No website listed"]
+
+if show_only_address:
+    filtered_df = filtered_df[filtered_df["address"] != "No address listed"]
+
+filtered_df = filtered_df.reset_index(drop=True)
+
 if not filtered_df.empty:
     filtered_df["name_key"] = filtered_df["name"].fillna("").str.strip().str.lower()
     filtered_df["lat_round"] = filtered_df["lat"].round(4)
@@ -806,7 +818,8 @@ if not filtered_df.empty:
         filtered_df
         .drop_duplicates(subset=["name_key", "lat_round", "lon_round"])
         .drop(columns=["name_key", "lat_round", "lon_round"])
-        .reset_index(drop=True))
+        .reset_index(drop=True)
+    )
 
 if search_term:
     q = search_term.strip().lower()
