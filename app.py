@@ -11,11 +11,17 @@ from datetime import datetime
 st.set_page_config(page_title="Melbourne Food, Sanitation and Shelter Finder", layout="wide")
 
 # ---------- Page header ----------
-st.title("Melbourne Support Finder")
-st.caption("Find nearby food, shelter, sanitation and community support services in Melbourne.")
+st.markdown(
+    """
+    <h1 style="text-align: center; font-size: 3.2rem; margin-bottom: 0.2rem;">
+        Melbourne Support Finder
+    </h1>
+    """,
+    unsafe_allow_html=True
+)
 
 # ---------- Urgent help ----------
-st.markdown("## Need help?")
+st.markdown("""## Victorian Government support services""")
 
 c1, c2, c3, c4, c5 = st.columns(5)
 
@@ -26,9 +32,7 @@ with c1:
         st.link_button(
             "Accommodation help",
             "https://services.dffh.vic.gov.au/getting-help",
-            use_container_width=True,
-        )
-
+            use_container_width=True,)
 with c2:
     with st.container(border=True):
         st.markdown("### 🛡️ Family Violence")
@@ -36,9 +40,7 @@ with c2:
         st.link_button(
             "Family Violence Support",
             "https://www.vic.gov.au/family-violence-statewide-support-services",
-            use_container_width=True,
-        )
-
+            use_container_width=True,)
 with c3:
     with st.container(border=True):
         st.markdown("### 🚨 Emergency - 000")
@@ -46,9 +48,7 @@ with c3:
         st.link_button(
             "Emergency help",
             "https://www.triplezero.vic.gov.au/",
-            use_container_width=True,
-        )
-
+            use_container_width=True,)
 with c4:
     with st.container(border=True):
         st.markdown("### 💊 Drugs & Alcohol")
@@ -56,9 +56,7 @@ with c4:
         st.link_button(
             "Drug & alcohol help",
             "https://www.health.vic.gov.au/aod-treatment-services/telephone-and-online-services",
-            use_container_width=True,
-        )
-
+            use_container_width=True,)
 with c5:
     with st.container(border=True):
         st.markdown("### 🥫 Food")
@@ -66,13 +64,10 @@ with c5:
         st.link_button(
             "Food relief help",
             "https://providers.dffh.vic.gov.au/community-food-relief",
-            use_container_width=True,
-        )
-
+            use_container_width=True,)
 st.caption(
     "This map is for support and wayfinding only. Availability, opening hours and safety conditions can change. "
-    "Call first where possible."
-)
+    "Call first where possible.")
 
 # ---------- Config ----------
 melbCoords = "(-38.40,144.60,-37.45,145.50)"
@@ -175,7 +170,6 @@ def address_from_tags(tags):
     parts = [p for p in parts if p]
     return ", ".join(parts) if parts else "No address listed"
 
-
 def classify(tags):
     social = tags.get("social_facility", "")
     office = tags.get("office", "")
@@ -190,37 +184,12 @@ def classify(tags):
         str(tags.get("denomination", "")),
     ]).lower()
 
-    food_keywords = [
-        "food", "meal", "meals", "pantry", "soup", "kitchen", "relief",
-        "groceries", "parcel", "breakfast", "lunch", "dinner",
-        "fareshare", "secondbite", "ozharvest", "community meal"
-    ]
-
-    support_keywords = [
-        "community", "care", "mission", "relief", "outreach", "parish",
-        "salvation army", "st vincent de paul", "vinnies", "wesley",
-        "anglicare", "unitingcare", "baptcare",
-    ]
-
-    dv_keywords = [
-        "domestic violence",
-        "family violence",
-        "women's refuge",
-        "womens refuge",
-        "safe steps",
-        "violence support",
-    ]
-
-    drug_alcohol_keywords = [
-        "drug",
-        "alcohol",
-        "aod",
-        "addiction",
-        "rehab",
-        "rehabilitation",
-        "substance",
-        "detox",
-    ]
+    food_keywords = ["food", "meal", "meals", "pantry", "soup", "kitchen", "relief","groceries", "parcel", "breakfast",
+                     "lunch", "dinner","fareshare", "secondbite", "ozharvest", "community meal"]
+    support_keywords = ["community", "care", "mission", "relief", "outreach", "parish","salvation army", "st vincent de paul",
+                        "vinnies", "wesley","anglicare", "unitingcare", "baptcare",]
+    dv_keywords = ["domestic violence","family violence","women's refuge","womens refuge","safe steps","violence support",]
+    drug_alcohol_keywords = ["drug","alcohol","aod","addiction","rehab","rehabilitation","substance","detox",]
 
     if social in {"food_bank", "soup_kitchen"}:
         return "Food Bank"
@@ -342,38 +311,21 @@ def load_osm_data():
 
         if lat is None or lon is None:
             continue
-
         service_type = classify(tags)
         address = address_from_tags(tags)
         phone = tags.get("phone", "No phone listed")
         website = tags.get("website", "No website listed")
         name = tags.get("name", "Unknown")
-
         note = ""
-
         if service_type == "Religious / Community Support":
             has_name = name != "Unknown"
             has_address = address != "No address listed"
             has_phone = phone != "No phone listed"
-
             if not has_name or not (has_address or has_phone):
                 continue
-
             note = "Religious or community-linked venue. Support availability is not guaranteed; contact directly where possible."
-
-        rows.append({
-            "name": name,
-            "type": service_type,
-            "lat": lat,
-            "lon": lon,
-            "address": address,
-            "phone": phone,
-            "website": website,
-            "hours": "",
-            "public_transport": "",
-            "source": "OSM",
-            "notes": note,
-        })
+    rows.append({"name": name, "type": service_type, "lat": lat, "lon": lon, "address": address,
+                 "phone": phone, "website": website, "hours": "", "public_transport": "", "source": "OSM", "notes": note})
 
     df = pd.DataFrame(rows).drop_duplicates()
     if df.empty:
@@ -398,50 +350,22 @@ def load_helping_out_food_data():
             HELPING_OUT_URL,
             params={"limit": limit, "offset": offset},
             timeout=60,
-            headers={"User-Agent": "Streamlit Melbourne Support Finder"},
-        )
+            headers={"User-Agent": "Streamlit Melbourne Support Finder"},)
         response.raise_for_status()
         payload = response.json()
         results = payload.get("results", [])
-
         if not results:
             break
-
         all_rows.extend(results)
-
         if len(results) < limit:
             break
-
         offset += limit
-
     df = pd.DataFrame(all_rows)
     if df.empty:
         return df
-
-    text_cols = [
-        c for c in [
-            "name",
-            "what",
-            "who",
-            "category_1",
-            "category_2",
-            "category_3",
-            "category_4",
-            "category_5",
-            "category_6",
-        ] if c in df.columns
-    ]
-
-    if not text_cols:
-        return pd.DataFrame()
-
-    df["search_text"] = (
-        df[text_cols]
-        .fillna("")
-        .astype(str)
-        .agg(" ".join, axis=1)
-        .str.lower()
-    )
+    text_cols = [c for c in ["name", "what", "who", "category_1", "category_2", "category_3", "category_4", "category_5", "category_6"] if c in df.columns]
+    if not text_cols: return pd.DataFrame()
+    df["search_text"] = df[text_cols].fillna("").astype(str).agg(" ".join, axis=1).str.lower()
 
     food_keywords = [
         "food", "meal", "meals", "breakfast", "lunch", "dinner",
@@ -458,10 +382,7 @@ def load_helping_out_food_data():
 
     address_cols = [c for c in ["address_1", "address_2", "suburb"] if c in df.columns]
     if address_cols:
-        df["address"] = (
-            df[address_cols]
-            .fillna("")
-            .agg(", ".join, axis=1)
+        df["address"] = (df[address_cols].fillna("").agg(", ".join, axis=1)
             .str.replace(r"(,\s*)+", ", ", regex=True)
             .str.strip(", ")
         )
@@ -533,20 +454,7 @@ def load_helping_out_shelter_data():
     if df.empty:
         return df
 
-    text_cols = [
-        c for c in [
-            "name",
-            "what",
-            "who",
-            "category_1",
-            "category_2",
-            "category_3",
-            "category_4",
-            "category_5",
-            "category_6",
-        ] if c in df.columns
-    ]
-
+    text_cols = [c for c in ["name", "what", "who", "category_1", "category_2", "category_3", "category_4", "category_5", "category_6"] if c in df.columns]
     if not text_cols:
         return pd.DataFrame()
 
@@ -558,23 +466,9 @@ def load_helping_out_shelter_data():
         .str.lower()
     )
 
-    shelter_keywords = [
-        "accommodation",
-        "crisis accommodation",
-        "homeless",
-        "homelessness",
-        "housing",
-        "rough sleeping",
-        "sleeping rough",
-        "supported housing",
-        "transitional housing",
-        "night shelter",
-        "rooming",
-        "common ground",
-        "launch housing",
-        "house of welcome",
-        "salvation army",
-    ]
+    shelter_keywords = ["accommodation", "crisis accommodation", "homeless", "homelessness", "housing", "rough sleeping",
+                        "sleeping rough", "supported housing", "transitional housing", "night shelter",
+                        "rooming", "common ground", "launch housing", "house of welcome", "salvation army"]
 
     df = df[df["search_text"].apply(lambda x: any(k in x for k in shelter_keywords))].copy()
 
@@ -636,91 +530,29 @@ def load_helping_out_support_data():
     limit = 100
 
     while True:
-        response = requests.get(
-            HELPING_OUT_URL,
-            params={"limit": limit, "offset": offset},
-            timeout=60,
-            headers={"User-Agent": "Streamlit Melbourne Support Finder"},
-        )
+        response = requests.get(HELPING_OUT_URL, params={"limit": limit, "offset": offset}, timeout=60, headers={"User-Agent": "Streamlit Melbourne Support Finder"})
         response.raise_for_status()
         payload = response.json()
         results = payload.get("results", [])
-
         if not results:
             break
-
         all_rows.extend(results)
 
         if len(results) < limit:
             break
-
         offset += limit
-
     df = pd.DataFrame(all_rows)
     if df.empty:
         return df
-
-    text_cols = [
-        c for c in [
-            "name",
-            "what",
-            "who",
-            "category_1",
-            "category_2",
-            "category_3",
-            "category_4",
-            "category_5",
-            "category_6",
-        ] if c in df.columns
-    ]
-
+    text_cols = [c for c in ["name", "what", "who", "category_1", "category_2", "category_3", "category_4", "category_5", "category_6"] if c in df.columns]
     if not text_cols:
         return pd.DataFrame()
+    df["search_text"] = df[text_cols].fillna("").astype(str).agg(" ".join, axis=1).str.lower()
 
-    df["search_text"] = (
-        df[text_cols]
-        .fillna("")
-        .astype(str)
-        .agg(" ".join, axis=1)
-        .str.lower()
-    )
-
-    support_keywords = [
-        "drug",
-        "alcohol",
-        "aod",
-        "addiction",
-        "detox",
-        "rehab",
-        "rehabilitation",
-        "substance",
-        "family violence",
-        "domestic violence",
-        "women's support",
-        "womens support",
-        "counselling",
-        "counseling",
-        "mental health",
-        "wellbeing",
-        "support",
-        "social work",
-        "needle and syringe",
-        "crisis",
-    ]
-
-    exclude_keywords = [
-        "food bank",
-        "food parcel",
-        "meal",
-        "meals",
-        "soup kitchen",
-        "accommodation",
-        "housing",
-        "homeless",
-        "homelessness",
-        "rough sleeping",
-        "sleeping rough",
-    ]
+    support_keywords = ["drug", "alcohol", "aod", "addiction", "detox", "rehab", "rehabilitation", "substance", "family violence",
+                        "domestic violence", "women's support", "womens support", "counselling", "counseling", "mental health", "wellbeing", "support", "social work", "needle and syringe", "crisis"]
+    exclude_keywords = ["food bank", "food parcel", "meal", "meals", "soup kitchen", "accommodation", "housing", "homeless", "homelessness",
+                        "rough sleeping", "sleeping rough"]
 
     include_mask = df["search_text"].apply(lambda x: any(k in x for k in support_keywords))
     exclude_mask = df["search_text"].apply(lambda x: any(k in x for k in exclude_keywords))
@@ -839,32 +671,19 @@ def food_offer_dialog():
             if not name.strip():
                 st.warning("Name is required.")
                 return
-
             if not address.strip():
                 st.warning("Address is required.")
                 return
-
             lat, lon = geocode_address(address.strip())
-
             if lat is None or lon is None:
                 st.warning("Could not find that address on the map. Please check the address and try again.")
                 return
-
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO food_offers (name, address, phone, website, notes, lat, lon, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                name.strip(),
-                address.strip(),
-                phone.strip(),
-                website.strip(),
-                notes.strip(),
-                lat,
-                lon,
-                datetime.utcnow().isoformat()
-            ))
+            """, (name.strip(),address.strip(),phone.strip(),website.strip(),notes.strip(),lat,lon,datetime.utcnow().isoformat()))
             conn.commit()
             conn.close()
 
@@ -889,24 +708,19 @@ for f in TYPE_ORDER:
     if f == "Food Bank":
         if "Food Bank" in osm_types or not helping_out_food_df.empty or not custom_food_df.empty:
             available_filters.append(f)
-
     elif f == "Shelter / Accommodation":
         if "Shelter / Accommodation" in osm_types or not helping_out_shelter_df.empty:
             available_filters.append(f)
-
     elif f == "Support Services":
         support_osm_types = {"Charity Organisation", "Religious / Community Support", "Women's Shelter"}
         if any(t in osm_types for t in support_osm_types) or not helping_out_support_df.empty:
             available_filters.append(f)
-
     elif f == "Sanitation":
         if not sanitation_df.empty:
             available_filters.append(f)
-
     else:
         if f in osm_types:
             available_filters.append(f)
-
 if not available_filters:
     st.warning("No services found.")
     st.stop()
@@ -953,7 +767,6 @@ with st.sidebar:
         if t in TYPE_TO_ICON:
             color, _ = marker_style(t)
             st.markdown(f"- **{t}**: {color}")
-
     st.divider()
     st.subheader("Offer food support")
     st.caption("Restaurants, cafés or organisations can add a food support location.")
@@ -993,8 +806,7 @@ if not filtered_df.empty:
         filtered_df
         .drop_duplicates(subset=["name_key", "lat_round", "lon_round"])
         .drop(columns=["name_key", "lat_round", "lon_round"])
-        .reset_index(drop=True)
-    )
+        .reset_index(drop=True))
 
 if search_term:
     q = search_term.strip().lower()
@@ -1018,7 +830,6 @@ m4.metric("With address", int((filtered_df["address"] != "No address listed").su
 if filtered_df.empty:
     st.warning("No locations found for this filter.")
     st.stop()
-
 st.write(f"Showing **{len(filtered_df)}** locations")
 
 # ---------- Map ----------
