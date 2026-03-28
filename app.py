@@ -1,4 +1,5 @@
 import sqlite3
+import time
 from datetime import datetime
 
 import folium
@@ -203,6 +204,19 @@ init_db()
 
 
 # ---------- Helpers ----------
+def rate_limit():
+    if "last_request" not in st.session_state:
+        st.session_state.last_request = 0
+
+    now = time.time()
+
+    if now - st.session_state.last_request < 2:
+        st.warning("Please wait before making another request")
+        st.stop()
+
+    st.session_state.last_request = now
+
+
 def geocode_address(address: str):
     try:
         response = requests.get(
@@ -347,7 +361,7 @@ def apply_search_filter(df: pd.DataFrame, search_term: str) -> pd.DataFrame:
 
     for col in search_cols:
         if col in df.columns:
-            mask = mask | df[col].fillna("").astype(str).str.lower().str.contains(q, na=False)
+            mask = mask | df[col].fillna("").astype(str).str.lower().str.contains(q, na=False, regex=False)
 
     return df[mask].reset_index(drop=True)
 
@@ -647,6 +661,7 @@ def food_offer_dialog():
         notes = st.text_area("Notes", placeholder="e.g. free meals after 5pm on weekdays")
 
         if st.form_submit_button("Submit"):
+            rate_limit()
             if not name.strip():
                 st.warning("Name is required.")
                 return
