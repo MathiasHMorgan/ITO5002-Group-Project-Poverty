@@ -1,6 +1,8 @@
+import html
 import sqlite3
 import time
 from datetime import datetime
+from pathlib import Path
 
 import folium
 import pandas as pd
@@ -13,8 +15,16 @@ from popup_utils import build_popup_html
 
 st.set_page_config(page_title="Melbourne Support Finder", layout="wide")
 
+APP_DIR = Path(__file__).resolve().parent
+GOV_SUPPORT_CARDS_CSS_PATH = APP_DIR / "static" / "gov_support_cards.css"
+RESULTS_CARDS_CSS_PATH = APP_DIR / "static" / "results_cards.css"
+
 # ---------- Constants ----------
 MELB_COORDS = "(-38.40,144.60,-37.45,145.50)"
+# Melbourne CBD (Hoddle Grid) — fixed centre when the map first loads
+MELBOURNE_CBD_LAT = -37.8136
+MELBOURNE_CBD_LON = 144.9631
+MAP_DEFAULT_ZOOM = 13
 DB_PATH = "community_food_support.db"
 
 OVERPASS_URLS = [
@@ -636,13 +646,32 @@ def render_header():
     )
     st.markdown("## Victorian Government support services")
 
-    cols = st.columns(5)
-    for col, card in zip(cols, GOV_SUPPORT_CARDS):
-        with col:
-            with st.container(border=True):
-                st.markdown(f"### {card['emoji']} {card['title']}")
-                st.caption(card["caption"])
-                st.link_button(card["button"], card["url"], use_container_width=True)
+    card_blocks = []
+    for card in GOV_SUPPORT_CARDS:
+        title = html.escape(card["title"])
+        caption = html.escape(card["caption"])
+        button = html.escape(card["button"])
+        url = html.escape(card["url"], quote=True)
+        emoji = card["emoji"]
+        # No leading indentation on HTML lines — Streamlit markdown treats 4+ space indents as code fences.
+        card_blocks.append(
+            f'<div class="gov-support-card">'
+            f'<h3 class="gov-support-card-title">{emoji} {title}</h3>'
+            f'<p class="gov-support-card-caption">{caption}</p>'
+            f'<a class="gov-support-card-link" href="{url}" target="_blank" rel="noopener noreferrer">{button}</a>'
+            f"</div>"
+        )
+    cards_inner = "\n".join(card_blocks)
+    gov_support_css = GOV_SUPPORT_CARDS_CSS_PATH.read_text(encoding="utf-8")
+    st.markdown(
+        "<style>\n"
+        + gov_support_css
+        + "\n</style>\n"
+        '<div class="gov-support-grid">\n'
+        + cards_inner
+        + "\n</div>",
+        unsafe_allow_html=True,
+    )
 
     st.caption(
         "This map is for support and wayfinding only. Availability, opening hours and safety conditions can change. "
@@ -809,13 +838,12 @@ def render_metrics(df):
 
 
 def render_map(df):
-    centre_lat = df["lat"].mean()
-    centre_lon = df["lon"].mean()
-
-    m = folium.Map(location=[centre_lat, centre_lon], zoom_start=12)
+    m = folium.Map(
+        location=[MELBOURNE_CBD_LAT, MELBOURNE_CBD_LON],
+        zoom_start=MAP_DEFAULT_ZOOM,
+    )
     cluster = MarkerCluster().add_to(m)
 
-    bounds = []
     for _, row in df.iterrows():
         color, icon_name = marker_style_for_row(row)
         folium.Marker(
@@ -824,31 +852,86 @@ def render_map(df):
             tooltip=row["name"],
             icon=folium.Icon(color=color, icon=icon_name),
         ).add_to(cluster)
-        bounds.append([row["lat"], row["lon"]])
-
-    if bounds:
-        m.fit_bounds(bounds)
 
     st_folium(m, width=None, height=720)
+
+
+def _result_text_for_html(val) -> str:
+    if val is None:
+        return ""
+    try:
+        if pd.isna(val):
+            return ""
+    except TypeError:
+        pass
+    return html.escape(str(val))
+
+
+def _result_website_html(website) -> str:
+    w = "" if website is None else str(website).strip()
+    if not w or w == "No website listed":
+        return _result_text_for_html(w or "No website listed")
+    low = w.lower()
+    if low.startswith("http://") or low.startswith("https://"):
+        return (
+            f'<a href="{html.escape(w, quote=True)}" target="_blank" rel="noopener noreferrer">'
+            f"{html.escape(w)}</a>"
+        )
+    return html.escape(w)
+
+
+def _result_card_html(row) -> str:
+    name = _result_text_for_html(row["name"])
+    rtype = _result_text_for_html(row["type"])
+    address = _result_text_for_html(row["address"])
+    phone = _result_text_for_html(row["phone"])
+    website_inner = _result_website_html(row.get("website"))
+
+    meta = ""
+    if row.get("source") == "Community food offer":
+        meta = '<p class="result-card-meta">Submitted via community form</p>'
+
+    notes = row.get("notes", "")
+    notes_block = ""
+    if notes is not None:
+        try:
+            if isinstance(notes, float) and pd.isna(notes):
+                notes = None
+        except TypeError:
+            pass
+    if notes is not None and str(notes).strip():
+        notes_block = f'<p class="result-card-notes">{html.escape(str(notes).strip())}</p>'
+
+    return (
+        '<div class="result-card">'
+        f'<h3 class="result-card-title">{name}</h3>'
+        f'<p class="result-card-type">{rtype}</p>'
+        f"{meta}"
+        '<p class="result-card-field"><span class="result-card-label">Address:</span> '
+        f"{address}</p>"
+        '<p class="result-card-field"><span class="result-card-label">Phone:</span> '
+        f"{phone}</p>"
+        '<p class="result-card-field"><span class="result-card-label">Website:</span> '
+        f"{website_inner}</p>"
+        f"{notes_block}"
+        "</div>"
+    )
 
 
 def render_results(df, selected_type):
     st.subheader(f"Results – {selected_type}")
 
-    for _, row in df.iterrows():
-        with st.container(border=True):
-            c1, _ = st.columns([3, 1])
-
-            with c1:
-                st.markdown(f"### {row['name']}")
-                st.caption(row["type"])
-                if row.get("source") == "Community food offer":
-                    st.caption("Submitted via community form")
-                st.write(f"**Address:** {row['address']}")
-                st.write(f"**Phone:** {row['phone']}")
-                st.write(f"**Website:** {row['website']}")
-                if row.get("notes", ""):
-                    st.caption(row["notes"])
+    cards_html = "".join(_result_card_html(row) for _, row in df.iterrows())
+    results_css = RESULTS_CARDS_CSS_PATH.read_text(encoding="utf-8")
+    st.markdown(
+        "<style>\n"
+        + results_css
+        + "\n</style>\n"
+        '<div class="results-grid">'
+        + cards_html
+        + "</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_raw_table(df):
