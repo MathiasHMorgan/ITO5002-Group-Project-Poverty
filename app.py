@@ -11,43 +11,63 @@ from datetime import datetime
 st.set_page_config(page_title="Melbourne Food, Sanitation and Shelter Finder", layout="wide")
 
 # ---------- Page header ----------
-st.title("Melbourne Food, Sanitation and Shelter Finder")
+st.title("Melbourne Support Finder")
 st.caption("Find nearby food, shelter, sanitation and community support services in Melbourne.")
 
 # ---------- Urgent help ----------
-st.markdown("## Need help tonight?")
+st.markdown("## Need help?")
 
 c1, c2, c3, c4, c5 = st.columns(5)
 
 with c1:
     with st.container(border=True):
         st.markdown("### 🛏️ Accommodation")
-        st.write("**1800 825 955**")
         st.caption("Homelessness / urgent accommodation")
+        st.link_button(
+            "Accommodation help",
+            "https://services.dffh.vic.gov.au/getting-help",
+            use_container_width=True,
+        )
 
 with c2:
     with st.container(border=True):
         st.markdown("### 🛡️ Family Violence")
-        st.write("**1800 015 188**")
         st.caption("Family violence support")
+        st.link_button(
+            "Family Violence Support",
+            "https://www.vic.gov.au/family-violence-statewide-support-services",
+            use_container_width=True,
+        )
 
 with c3:
     with st.container(border=True):
-        st.markdown("### 🚨 Emergency")
-        st.write("**000**")
+        st.markdown("### 🚨 Emergency - 000")
         st.caption("Immediate danger or emergency")
+        st.link_button(
+            "Emergency help",
+            "https://www.triplezero.vic.gov.au/",
+            use_container_width=True,
+        )
 
 with c4:
     with st.container(border=True):
-        st.markdown("### 💊 Drugs / Alcohol")
-        st.write("**211**")
-        st.caption("Free call for food, housing and support services")
+        st.markdown("### 💊 Drugs & Alcohol")
+        st.caption("For Drug and alcohol support")
+        st.link_button(
+            "Drug & alcohol help",
+            "https://www.health.vic.gov.au/aod-treatment-services/telephone-and-online-services",
+            use_container_width=True,
+        )
 
 with c5:
     with st.container(border=True):
         st.markdown("### 🥫 Food")
-        st.write("**211**")
-        st.caption("Free call for food, housing and support services")
+        st.caption("Food relief and support services")
+        st.link_button(
+            "Food relief help",
+            "https://providers.dffh.vic.gov.au/community-food-relief",
+            use_container_width=True,
+        )
 
 st.caption(
     "This map is for support and wayfinding only. Availability, opening hours and safety conditions can change. "
@@ -89,44 +109,21 @@ out center;
 
 OVERPASS_URLS = [
     "https://overpass.private.coffee/api/interpreter",
-    "https://overpass-api.de/api/interpreter",
-]
-
+    "https://overpass-api.de/api/interpreter"]
 PUBLIC_TOILETS_URL = "https://data.melbourne.vic.gov.au/api/v2/catalog/datasets/public-toilets/exports/json"
-
 HELPING_OUT_URL = (
     "https://data.melbourne.vic.gov.au/api/explore/v2.1/catalog/datasets/"
-    "free-and-cheap-support-services-with-opening-hours-public-transport-and-parking-/records"
-)
-
+    "free-and-cheap-support-services-with-opening-hours-public-transport-and-parking-/records")
 TYPE_ORDER = [
-    "Food Bank",
-    "Shelter / Accommodation",
-    "Youth Shelter",
-    "Women's Shelter",
-    "Support Services",
-    "Charity Organisation",
-    "Religious / Community Support",
-    "Sanitation",
-]
-
+    "Food Bank","Shelter / Accommodation","Youth Shelter", "Women's Shelter","Support Services","Charity Organisation","Religious / Community Support","Sanitation",]
 TYPE_TO_ICON = {
-    "Food Bank": ("green", "cutlery"),
-    "Shelter / Accommodation": ("red", "home"),
-    "Youth Shelter": ("cadetblue", "home"),
-    "Women's Shelter": ("pink", "heart"),
-    "Support Services": ("darkblue", "plus"),
-    "Charity Organisation": ("blue", "info-sign"),
-    "Religious / Community Support": ("purple", "plus"),
-    "Sanitation": ("orange", "tint"),
-}
-
+    "Food Bank": ("green", "cutlery"),"Shelter / Accommodation": ("red", "home"),"Youth Shelter": ("cadetblue", "home"),"Women's Shelter": ("pink", "heart"),
+    "Support Services": ("darkblue", "plus"),"Charity Organisation": ("blue", "info-sign"),"Religious / Community Support": ("purple", "plus"),"Sanitation": ("orange", "tint"),}
 DB_PATH = "community_food_support.db"
 
 
 def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
-
 
 def init_db():
     conn = get_connection()
@@ -622,7 +619,7 @@ def load_helping_out_shelter_data():
 
     df["type"] = "Shelter / Accommodation"
     df["source"] = "City of Melbourne Helping Out"
-    df["notes"] = "Accommodation or homelessness-related support service from City of Melbourne Helping Out."
+    df["notes"] = "Accommodation or homelessness-related support service from City of Melbourne Helping Out"
 
     keep_cols = [
         "name", "type", "lat", "lon", "address", "phone", "website",
@@ -828,7 +825,7 @@ def load_sanitation_data():
 @st.dialog("Offer food support")
 def food_offer_dialog():
     with st.form("food_offer_form"):
-        st.write("Add a restaurant, uni café, or other place offering food support.")
+        st.write("Add a restaurant, uni cafe, or other place offering food support.")
 
         name = st.text_input("Organisation / venue name*")
         address = st.text_input("Address*")
