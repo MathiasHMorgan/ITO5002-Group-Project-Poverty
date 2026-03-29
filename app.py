@@ -879,6 +879,15 @@ def _result_website_html(website) -> str:
 def _result_card_html(row) -> str:
     name = _result_text_for_html(row["name"])
     rtype = _result_text_for_html(row["type"])
+
+    if row.get("type") == "Sanitation":
+        return (
+            '<div class="result-card">'
+            f'<h3 class="result-card-title">{name}</h3>'
+            f'<p class="result-card-type">{rtype}</p>'
+            "</div>"
+        )
+
     address = _result_text_for_html(row["address"])
     phone = _result_text_for_html(row["phone"])
     website_inner = _result_website_html(row.get("website"))
