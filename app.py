@@ -1005,7 +1005,9 @@ filtered_df = build_filtered_df(
     helping_out_support_df,
     helping_out_hygiene_df,
 )
-
+filtered_df = filtered_df[
+    ~filtered_df["name"].fillna("").str.strip().str.lower().isin(["", "unknown"])
+].reset_index(drop=True)
 filtered_df = apply_detail_filters(filtered_df, show_only_phone, show_only_website, show_only_address)
 filtered_df = dedupe_locations(filtered_df)
 filtered_df = apply_search_filter(filtered_df, search_term)
