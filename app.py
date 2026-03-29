@@ -81,7 +81,6 @@ TYPE_TO_ICON = {
     "Food": ("green", "cutlery"),
     "Shelter": ("red", "home"),
     "Youth Shelter": ("cadetblue", "home"),
-    "Women's Shelter": ("pink", "heart"),
     "Support Services": ("darkblue", "plus"),
     "Charity Organisation": ("blue", "info-sign"),
     "Religious / Community Support": ("purple", "plus"),
@@ -211,9 +210,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-
 init_db()
-
 
 # ---------- Helpers ----------
 def rate_limit():
@@ -401,19 +398,6 @@ def normalise_helping_out_df(df: pd.DataFrame, out_type: str, notes: str) -> pd.
     df["website"] = df["website"].fillna("No website listed") if "website" in df.columns else "No website listed"
     df["hours"] = df["opening_hours"].fillna("") if "opening_hours" in df.columns else ""
 
-    transport_cols = [c for c in ["tram_routes", "bus_routes", "nearest_train_station"] if c in df.columns]
-    if transport_cols:
-        df["public_transport"] = (
-            df[transport_cols]
-            .fillna("")
-            .astype(str)
-            .agg(" | ".join, axis=1)
-            .str.replace(r"(\s*\|\s*)+", " | ", regex=True)
-            .str.strip(" |")
-        )
-    else:
-        df["public_transport"] = ""
-
     df["lat"] = pd.to_numeric(df["latitude"], errors="coerce") if "latitude" in df.columns else pd.NA
     df["lon"] = pd.to_numeric(df["longitude"], errors="coerce") if "longitude" in df.columns else pd.NA
     df = df.dropna(subset=["lat", "lon"]).copy()
@@ -422,9 +406,8 @@ def normalise_helping_out_df(df: pd.DataFrame, out_type: str, notes: str) -> pd.
     df["source"] = "City of Melbourne Helping Out"
     df["notes"] = notes
 
-    keep_cols = ["name", "type", "lat", "lon", "address", "phone", "website", "hours", "public_transport", "source", "notes"]
+    keep_cols = ["name", "type", "lat", "lon", "address", "phone", "website", "hours", "source", "notes"]
     return df[keep_cols].drop_duplicates().reset_index(drop=True)
-
 
 # ---------- Loaders ----------
 @st.cache_data(ttl=30)
@@ -438,14 +421,13 @@ def load_custom_food_offers():
 
     df["type"] = "Food"
     df["hours"] = ""
-    df["public_transport"] = ""
     df["source"] = "Community food offer"
     df["notes"] = df["notes"].fillna("Food support submitted through the app.")
     df["address"] = df["address"].fillna("No address listed")
     df["phone"] = df["phone"].fillna("No phone listed")
     df["website"] = df["website"].fillna("No website listed")
 
-    keep_cols = ["name", "type", "lat", "lon", "address", "phone", "website", "hours", "public_transport", "source", "notes"]
+    keep_cols = ["name", "type", "lat", "lon", "address", "phone", "website", "hours", "source", "notes"]
     return df[keep_cols].dropna(subset=["lat", "lon"]).drop_duplicates().reset_index(drop=True)
 
 
@@ -493,7 +475,6 @@ def load_osm_data():
             "phone": tags.get("phone", "No phone listed"),
             "website": tags.get("website", "No website listed"),
             "hours": "",
-            "public_transport": "",
             "source": "OSM",
             "notes": "",
         }
@@ -645,7 +626,7 @@ def load_sanitation_data():
     df["source"] = "City of Melbourne Public Toilets"
     df["notes"] = "Public toilet location."
 
-    keep_cols = ["name", "type", "lat", "lon", "address", "phone", "website", "hours", "public_transport", "source", "notes"]
+    keep_cols = ["name", "type", "lat", "lon", "address", "phone", "website", "hours", "source", "notes"]
     return df[keep_cols].dropna(subset=["lat", "lon"]).drop_duplicates().reset_index(drop=True)
 
 
