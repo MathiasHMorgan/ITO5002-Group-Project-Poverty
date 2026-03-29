@@ -19,6 +19,9 @@ def make_website_html(website: str) -> str:
 
 
 def build_popup_html(row) -> str:
+    if row.get("type") == "Sanitation":
+        return f"<b>{clean(row.get('name'), 'Public Toilet')}</b>"
+
     return POPUP_TEMPLATE.format(
         name=clean(row.get("name"), "Unknown"),
         type=clean(row.get("type"), "Unknown"),

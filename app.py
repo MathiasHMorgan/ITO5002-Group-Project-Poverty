@@ -217,15 +217,11 @@ init_db()
 def rate_limit():
     if "last_request" not in st.session_state:
         st.session_state.last_request = 0
-
     now = time.time()
-
     if now - st.session_state.last_request < 2:
         st.warning("Please wait before making another request")
         st.stop()
-
     st.session_state.last_request = now
-
 
 def geocode_address(address: str):
     try:
