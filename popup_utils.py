@@ -3,10 +3,8 @@ import pandas as pd
 
 POPUP_TEMPLATE = Path("templates/popup.html").read_text(encoding="utf-8")
 
-
 def clean(value, fallback):
     return fallback if pd.isna(value) or str(value).strip() == "" else str(value)
-
 
 def make_website_html(website: str) -> str:
     website = clean(website, "No website listed")
@@ -17,10 +15,16 @@ def make_website_html(website: str) -> str:
         website = f"https://{website}"
     return f'<a href="{website}" target="_blank">{website}</a>'
 
-
 def build_popup_html(row) -> str:
-    if row.get("type") == "Sanitation":
-        return f"<b>{clean(row.get('name'), 'Public Toilet')}</b>"
+    source = clean(row.get("source"), "")
+
+    if source == "City of Melbourne Public Toilets":
+        return f"""
+        <div style="min-width:220px;">
+            <h4 style="margin-bottom:6px;">{clean(row.get("name"), "Public Toilet")}</h4>
+            <p style="margin:0;"><strong>Type:</strong> {clean(row.get("type"), "Sanitation")}</p>
+        </div>
+        """
 
     return POPUP_TEMPLATE.format(
         name=clean(row.get("name"), "Unknown"),

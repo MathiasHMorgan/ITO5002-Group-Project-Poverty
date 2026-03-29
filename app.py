@@ -3,7 +3,6 @@ import sqlite3
 import time
 from datetime import datetime
 from pathlib import Path
-
 import folium
 import pandas as pd
 import requests
@@ -188,7 +187,6 @@ GOV_SUPPORT_CARDS = [
     },
 ]
 
-
 # ---------- DB ----------
 def get_connection():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -334,6 +332,10 @@ def marker_style(service_type):
 def marker_style_for_row(row):
     if row.get("source") == "Community food offer":
         return ("darkgreen", "star")
+    if row.get("type") == "Sanitation":
+        if row.get("source") == "City of Melbourne Public Toilets":
+            return ("orange", "info-sign")
+        return ("blue", "tint")
     return marker_style(row["type"])
 
 
