@@ -69,10 +69,9 @@ out center;
 """
 
 TYPE_ORDER = [
-    "Food Bank",
-    "Shelter / Accommodation",
+    "Food",
+    "Shelter",
     "Youth Shelter",
-    "Women's Shelter",
     "Support Services",
     "Charity Organisation",
     "Religious / Community Support",
@@ -80,8 +79,8 @@ TYPE_ORDER = [
 ]
 
 TYPE_TO_ICON = {
-    "Food Bank": ("green", "cutlery"),
-    "Shelter / Accommodation": ("red", "home"),
+    "Food": ("green", "cutlery"),
+    "Shelter": ("red", "home"),
     "Youth Shelter": ("cadetblue", "home"),
     "Women's Shelter": ("pink", "heart"),
     "Support Services": ("darkblue", "plus"),
@@ -99,7 +98,7 @@ FOOD_KEYWORDS = [
     "food", "meal", "meals", "pantry", "soup", "kitchen", "relief",
     "groceries", "parcel", "breakfast", "lunch", "dinner",
     "fareshare", "secondbite", "ozharvest", "community meal",
-    "food parcel", "food bank", "voucher"
+    "food parcel", "Food", "voucher"
 ]
 
 SUPPORT_KEYWORDS = [
@@ -141,9 +140,14 @@ HELPING_OUT_SUPPORT_KEYWORDS = [
 ]
 
 HELPING_OUT_SUPPORT_EXCLUDE = [
-    "food bank", "food parcel", "meal", "meals", "soup kitchen",
+    "Food", "food parcel", "meal", "meals", "soup kitchen",
     "accommodation", "housing", "homeless", "homelessness",
     "rough sleeping", "sleeping rough"
+]
+
+HYGIENE_KEYWORDS = [
+    "shower", "showers", "laundry", "washing", "washing machine",
+    "washer", "dryer", "clothes washing", "toiletries", "hygiene"
 ]
 
 GOV_SUPPORT_CARDS = [
@@ -270,7 +274,7 @@ def classify_osm(tags):
     ]).lower()
 
     if social in {"food_bank", "soup_kitchen"} or amenity == "food_sharing":
-        return "Food Bank"
+        return "Food"
 
     if social in {"shelter", "group_home"}:
         if has_any_keyword(text, AGED_CARE_KEYWORDS):
@@ -279,11 +283,11 @@ def classify_osm(tags):
             return "Youth Shelter"
         if "woman" in social_for or has_any_keyword(text, DV_KEYWORDS):
             return "Women's Shelter"
-        return "Shelter / Accommodation"
+        return "Shelter"
 
     if office == "charity":
         if has_any_keyword(text, FOOD_KEYWORDS):
-            return "Food Bank"
+            return "Food"
         if has_any_keyword(text, DRUG_ALCOHOL_KEYWORDS):
             return "Support Services"
         if has_any_keyword(text, DV_KEYWORDS):
@@ -292,7 +296,7 @@ def classify_osm(tags):
 
     if amenity == "community_centre":
         if has_any_keyword(text, FOOD_KEYWORDS):
-            return "Food Bank"
+            return "Food"
         if has_any_keyword(text, DRUG_ALCOHOL_KEYWORDS):
             return "Support Services"
         if has_any_keyword(text, DV_KEYWORDS):
@@ -301,7 +305,7 @@ def classify_osm(tags):
 
     if amenity == "place_of_worship":
         if has_any_keyword(text, FOOD_KEYWORDS):
-            return "Food Bank"
+            return "Food"
         if has_any_keyword(text, DRUG_ALCOHOL_KEYWORDS):
             return "Support Services"
         if has_any_keyword(text, DV_KEYWORDS):
@@ -430,7 +434,7 @@ def load_custom_food_offers():
     if df.empty:
         return df
 
-    df["type"] = "Food Bank"
+    df["type"] = "Food"
     df["hours"] = ""
     df["public_transport"] = ""
     df["source"] = "Community food offer"
@@ -559,7 +563,7 @@ def load_helping_out_food_data():
         return df
 
     df = df[df["search_text"].apply(lambda x: has_any_keyword(x, FOOD_KEYWORDS))].copy()
-    return normalise_helping_out_df(df, "Food Bank", "Food-related support service from City of Melbourne Helping Out.")
+    return normalise_helping_out_df(df, "Food", "Food-related support service from City of Melbourne Helping Out.")
 
 
 @st.cache_data(ttl=86400)
@@ -573,7 +577,7 @@ def load_helping_out_shelter_data():
         & ~df["search_text"].apply(lambda x: has_any_keyword(x, AGED_CARE_KEYWORDS))
     ].copy()
 
-    return normalise_helping_out_df(df, "Shelter / Accommodation", "Accommodation or homelessness-related support service from City of Melbourne Helping Out.")
+    return normalise_helping_out_df(df, "Shelter", "Accommodation or homelessness-related support service from City of Melbourne Helping Out.")
 
 
 @st.cache_data(ttl=86400)
@@ -588,6 +592,19 @@ def load_helping_out_support_data():
 
     return normalise_helping_out_df(df, "Support Services", "Drug, alcohol, family violence or general support service from City of Melbourne Helping Out.")
 
+@st.cache_data(ttl=86400)
+def load_helping_out_hygiene_data():
+    df = fetch_helping_out_raw()
+    if df.empty:
+        return df
+
+    df = df[df["search_text"].apply(lambda x: has_any_keyword(x, HYGIENE_KEYWORDS))].copy()
+
+    return normalise_helping_out_df(
+        df,
+        "Sanitation",
+        "Shower, laundry or hygiene-related service from City of Melbourne Helping Out."
+    )
 
 @st.cache_data(ttl=86400)
 def load_sanitation_data():
@@ -718,7 +735,7 @@ def food_offer_dialog():
             conn.close()
 
             st.cache_data.clear()
-            st.session_state["selected_type"] = "Food Bank"
+            st.session_state["selected_type"] = "Food"
             st.success("Food provider added.")
             st.rerun()
 
@@ -728,32 +745,40 @@ def render_quick_actions():
     qa1, qa2, qa3, qa4 = st.columns(4)
 
     if qa1.button("Need food", use_container_width=True):
-        st.session_state["selected_type"] = "Food Bank"
+        st.session_state["selected_type"] = "Food"
     if qa2.button("Need shelter", use_container_width=True):
-        st.session_state["selected_type"] = "Shelter / Accommodation"
+        st.session_state["selected_type"] = "Shelter"
     if qa3.button("Need Sanitation", use_container_width=True):
         st.session_state["selected_type"] = "Sanitation"
     if qa4.button("Need support", use_container_width=True):
         st.session_state["selected_type"] = "Support Services"
 
 
-def build_available_filters(osm_df, helping_out_food_df, custom_food_df, sanitation_df, helping_out_shelter_df, helping_out_support_df):
+def build_available_filters(
+    osm_df,
+    helping_out_food_df,
+    custom_food_df,
+    sanitation_df,
+    helping_out_shelter_df,
+    helping_out_support_df,
+    helping_out_hygiene_df,
+):
     available = []
     osm_types = set(osm_df["type"].dropna().unique().tolist()) if not osm_df.empty else set()
 
     for f in TYPE_ORDER:
-        if f == "Food Bank":
-            if "Food Bank" in osm_types or not helping_out_food_df.empty or not custom_food_df.empty:
+        if f == "Food":
+            if "Food" in osm_types or not helping_out_food_df.empty or not custom_food_df.empty:
                 available.append(f)
-        elif f == "Shelter / Accommodation":
-            if "Shelter / Accommodation" in osm_types or not helping_out_shelter_df.empty:
+        elif f == "Shelter":
+            if "Shelter" in osm_types or not helping_out_shelter_df.empty:
                 available.append(f)
         elif f == "Support Services":
             support_osm_types = {"Charity Organisation", "Religious / Community Support", "Women's Shelter"}
             if any(t in osm_types for t in support_osm_types) or not helping_out_support_df.empty:
                 available.append(f)
         elif f == "Sanitation":
-            if not sanitation_df.empty:
+            if not sanitation_df.empty or not helping_out_hygiene_df.empty:
                 available.append(f)
         else:
             if f in osm_types:
@@ -801,16 +826,25 @@ def render_sidebar(available_filters):
     return selected_type, search_term, show_only_phone, show_only_website, show_only_address
 
 
-def build_filtered_df(selected_type, osm_df, helping_out_food_df, custom_food_df, sanitation_df, helping_out_shelter_df, helping_out_support_df):
+def build_filtered_df(
+    selected_type,
+    osm_df,
+    helping_out_food_df,
+    custom_food_df,
+    sanitation_df,
+    helping_out_shelter_df,
+    helping_out_support_df,
+    helping_out_hygiene_df,
+):
     if selected_type == "Sanitation":
-        return sanitation_df.copy()
+        return pd.concat([sanitation_df, helping_out_hygiene_df], ignore_index=True)
 
-    if selected_type == "Food Bank":
-        osm_food_df = osm_df[osm_df["type"] == "Food Bank"].copy()
+    if selected_type == "Food":
+        osm_food_df = osm_df[osm_df["type"] == "Food"].copy()
         return pd.concat([osm_food_df, helping_out_food_df, custom_food_df], ignore_index=True)
 
-    if selected_type == "Shelter / Accommodation":
-        osm_shelter_df = osm_df[osm_df["type"] == "Shelter / Accommodation"].copy()
+    if selected_type == "Shelter":
+        osm_shelter_df = osm_df[osm_df["type"] == "Shelter"].copy()
         osm_shelter_df = osm_shelter_df[
             ~osm_shelter_df["name"].fillna("").str.lower().apply(lambda x: has_any_keyword(x, AGED_CARE_KEYWORDS))
         ].copy()
@@ -879,8 +913,9 @@ def _result_website_html(website) -> str:
 def _result_card_html(row) -> str:
     name = _result_text_for_html(row["name"])
     rtype = _result_text_for_html(row["type"])
+    source = row.get("source", "")
 
-    if row.get("type") == "Sanitation":
+    if source == "City of Melbourne Public Toilets":
         return (
             '<div class="result-card">'
             f'<h3 class="result-card-title">{name}</h3>'
@@ -957,6 +992,7 @@ custom_food_df = load_custom_food_offers()
 sanitation_df = load_sanitation_data()
 helping_out_shelter_df = load_helping_out_shelter_data()
 helping_out_support_df = load_helping_out_support_data()
+helping_out_hygiene_df = load_helping_out_hygiene_data()
 
 available_filters = build_available_filters(
     osm_df,
@@ -965,6 +1001,7 @@ available_filters = build_available_filters(
     sanitation_df,
     helping_out_shelter_df,
     helping_out_support_df,
+    helping_out_hygiene_df
 )
 
 if not available_filters:
@@ -983,6 +1020,7 @@ filtered_df = build_filtered_df(
     sanitation_df,
     helping_out_shelter_df,
     helping_out_support_df,
+    helping_out_hygiene_df,
 )
 
 filtered_df = apply_detail_filters(filtered_df, show_only_phone, show_only_website, show_only_address)
