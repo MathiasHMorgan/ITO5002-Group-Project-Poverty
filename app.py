@@ -54,15 +54,6 @@ OSM_QUERY = f"""
 
   node["amenity"="social_facility"]["social_facility"="group_home"]{MELB_COORDS};
   way["amenity"="social_facility"]["social_facility"="group_home"]{MELB_COORDS};
-
-  node["office"="charity"]{MELB_COORDS};
-  way["office"="charity"]{MELB_COORDS};
-
-  node["amenity"="place_of_worship"]{MELB_COORDS};
-  way["amenity"="place_of_worship"]{MELB_COORDS};
-
-  node["amenity"="community_centre"]{MELB_COORDS};
-  way["amenity"="community_centre"]{MELB_COORDS};
 );
 out center;
 """
