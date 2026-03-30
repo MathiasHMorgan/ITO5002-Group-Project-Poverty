@@ -455,7 +455,10 @@ def load_osm_data():
         with st.expander("Show endpoint errors"):
             for err in errors:
                 st.write(err)
-        return pd.DataFrame()
+        return pd.DataFrame(columns=[
+            "name", "type", "lat", "lon", "address",
+            "phone", "website", "hours", "source", "notes"
+        ])
 
     rows = []
     for el in data.get("elements", []):
@@ -823,23 +826,27 @@ def build_filtered_df(
         return pd.concat([sanitation_df, helping_out_hygiene_df], ignore_index=True)
 
     if selected_type == "Food":
-        osm_food_df = osm_df[osm_df["type"] == "Food"].copy()
+        osm_food_df = osm_df[osm_df["type"] == "Food"].copy() if "type" in osm_df.columns else pd.DataFrame()
         return pd.concat([osm_food_df, helping_out_food_df, custom_food_df], ignore_index=True)
 
     if selected_type == "Shelter":
-        osm_shelter_df = osm_df[osm_df["type"] == "Shelter"].copy()
-        osm_shelter_df = osm_shelter_df[
-            ~osm_shelter_df["name"].fillna("").str.lower().apply(lambda x: has_any_keyword(x, AGED_CARE_KEYWORDS))
-        ].copy()
+        osm_shelter_df = osm_df[osm_df["type"] == "Shelter"].copy() if "type" in osm_df.columns else pd.DataFrame()
+        if not osm_shelter_df.empty:
+            osm_shelter_df = osm_shelter_df[
+                ~osm_shelter_df["name"].fillna("").str.lower().apply(lambda x: has_any_keyword(x, AGED_CARE_KEYWORDS))
+            ].copy()
         return pd.concat([osm_shelter_df, helping_out_shelter_df], ignore_index=True)
 
     if selected_type == "Support Services":
-        osm_support_df = osm_df[
-            osm_df["type"].isin(["Charity Organisation", "Religious / Community Support", "Women's Shelter"])
-        ].copy()
+        if "type" in osm_df.columns:
+            osm_support_df = osm_df[
+                osm_df["type"].isin(["Charity Organisation", "Religious / Community Support", "Women's Shelter"])
+            ].copy()
+        else:
+            osm_support_df = pd.DataFrame()
         return pd.concat([osm_support_df, helping_out_support_df], ignore_index=True)
 
-    return osm_df[osm_df["type"] == selected_type].reset_index(drop=True)
+    return osm_df[osm_df["type"] == selected_type].reset_index(drop=True) if "type" in osm_df.columns else pd.DataFrame()
 
 
 def render_metrics(df):
