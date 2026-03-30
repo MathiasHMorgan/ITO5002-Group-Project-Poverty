@@ -442,10 +442,6 @@ def load_osm_data():
             errors.append(f"{url} -> {e}")
 
     if data is None:
-        st.error("Could not load OSM service data from any Overpass endpoint.")
-        with st.expander("Show endpoint errors"):
-            for err in errors:
-                st.write(err)
         return pd.DataFrame(columns=[
             "name", "type", "lat", "lon", "address",
             "phone", "website", "hours", "source", "notes"
@@ -593,9 +589,11 @@ def load_sanitation_data():
         )
         response.raise_for_status()
         data = response.json()
-    except requests.exceptions.RequestException as e:
-        st.error(f"Could not load sanitation data: {e}")
-        return pd.DataFrame()
+    except requests.exceptions.RequestException:
+        return pd.DataFrame(columns=[
+            "name", "type", "lat", "lon", "address",
+            "phone", "website", "hours", "source", "notes"
+        ])
 
     df = pd.DataFrame(data)
     if df.empty:
@@ -605,8 +603,10 @@ def load_sanitation_data():
     lon_col = next((c for c in ["longitude", "Longitude", "lon", "lng"] if c in df.columns), None)
 
     if lat_col is None or lon_col is None:
-        st.error(f"Could not find sanitation dataset coordinates. Columns found: {list(df.columns)}")
-        return pd.DataFrame()
+        return pd.DataFrame(columns=[
+            "name", "type", "lat", "lon", "address",
+            "phone", "website", "hours", "source", "notes"
+        ])
 
     df["lat"] = pd.to_numeric(df[lat_col], errors="coerce")
     df["lon"] = pd.to_numeric(df[lon_col], errors="coerce")
