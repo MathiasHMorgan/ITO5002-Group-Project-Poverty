@@ -663,11 +663,6 @@ def render_header():
         unsafe_allow_html=True,
     )
 
-    st.caption(
-        "This map is for support and wayfinding only. Availability, opening hours and safety conditions can change. "
-        "Call first where possible."
-    )
-
 
 @st.dialog("Offer food support")
 def food_offer_dialog():
